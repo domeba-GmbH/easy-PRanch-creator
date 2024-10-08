@@ -12,10 +12,13 @@ import { BranchCreator } from "../branch-creator";
 import { StorageService } from "../storage-service";
 import { RepositorySelect } from "../repository-select/repository-select";
 import { BranchSelect } from "../branch-select/branch-select";
+import { PullRequestCreator } from "../pull-request-creator";
+import { Checkbox } from "azure-devops-ui/Checkbox";
 
 export interface ISelectBranchDetailsResult {
     repositoryId: string;
     sourceBranchName: string;
+    createPullRequests: boolean;
 }
 
 interface ISelectBranchDetailsState {
@@ -25,12 +28,14 @@ interface ISelectBranchDetailsState {
     sourceBranchName?: string;
     ready: boolean;
     branchNames: string[];
+    createPullRequests?: boolean;
+    pullRequestNames: string[];
 }
 
 class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
     constructor(props: {}) {
         super(props);
-        this.state = { workItems: [], branchNames: [], ready: false };
+        this.state = { workItems: [], branchNames: [], ready: false, pullRequestNames: [] };
     }
 
     public componentDidMount() {
@@ -39,12 +44,23 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
         SDK.ready().then(async () => {
             const config = SDK.getConfiguration();
             if (config.dialog) {
-                SDK.resize(undefined, 275);
+                SDK.resize(undefined, 350);
             }
 
-            this.setState({ projectName: config.projectName, workItems: config.workItems, selectedRepositoryId: config.initialValue, ready: false, branchNames: [] });
+            const storageService = new StorageService();
+            const settingsDocument = await storageService.getSettings();
+
+            this.setState({
+                createPullRequests: settingsDocument.createPullRequestByDefault,
+                projectName: config.projectName,
+                workItems: config.workItems,
+                selectedRepositoryId: config.initialValue,
+                ready: false,
+                branchNames: [],
+            });
 
             await this.setBranchNames();
+            await this.setPullRequestNames()
 
             this.setState(prevState => ({
                 ...prevState,
@@ -56,7 +72,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
     public render(): JSX.Element {
         return (
             <div className="branch-details-form flex-column flex-grow rhythm-vertical-16">
-                <div className="flex-grow">
+                <div className="branch-details-form-body flex-grow">
                     <RepositorySelect
                         projectName={this.state.projectName}
                         onRepositoryChange={(newRepositoryId) => this.onRepositoryChange(newRepositoryId)} />
@@ -68,20 +84,52 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                     <div className="branchNames flex-column scroll-auto">
                         <div>
                             <ul>
-                                {this.state.branchNames.map(b => <li key={b}>{b}</li>)}
+                                {this.state.branchNames.map((b) => (
+                                    <li key={b}>{b}</li>
+                                ))}
                             </ul>
                         </div>
                     </div>
+                    <hr></hr>
+                    <div className="flex-row justify-space-between">
+                        <p>Pull Request</p>
+                        <Checkbox
+                            label="Create Pull Request"
+                            checked={this.state.createPullRequests}
+                            disabled={!this.state.ready}
+                            onChange={(event, checked) => {
+                                this.setState({ createPullRequests: checked });
+                            }}
+                        />
+                    </div>
+                    {this.state.createPullRequests && (
+                        <div className="branchNames flex-column scroll-auto">
+                            <div>
+                                <ul>
+                                    {this.state.pullRequestNames.map((b) => (
+                                        <li key={b}>{b}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <ButtonGroup className="branch-details-form-button-bar ">
                     <Button
                         disabled={!this.state.selectedRepositoryId}
                         primary={true}
                         text="Create Branch"
-                        onClick={() => this.close(this.state.selectedRepositoryId && this.state.sourceBranchName ? {
-                            repositoryId: this.state.selectedRepositoryId,
-                            sourceBranchName: this.state.sourceBranchName
-                        } : undefined)}
+                        onClick={() =>
+                            this.close(
+                                this.state.selectedRepositoryId && this.state.sourceBranchName
+                                    ? {
+                                          repositoryId: this.state.selectedRepositoryId,
+                                          sourceBranchName: this.state.sourceBranchName,
+                                          createPullRequests: this.state.createPullRequests ?? false,
+                                      }
+                                    : undefined
+                            )
+                        }
                     />
                     <Button
                         text="Cancel"
@@ -129,6 +177,26 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
             this.setState(prevState => ({
                 ...prevState,
                 branchNames: branchNames
+            }));
+        }
+    }
+
+    private async setPullRequestNames() {
+        if (this.state.projectName) {
+            const workItemTrackingRestClient = getClient(WorkItemTrackingRestClient);
+            const storageService = new StorageService();
+            const settingsDocument = await storageService.getSettings();
+
+            const pullRequestCreator = new PullRequestCreator();
+            let pullRequestNames: string[] = [];
+            for await (const workItemId of this.state.workItems) {
+                const branchName = await pullRequestCreator.getPullRequestName(workItemTrackingRestClient, settingsDocument, workItemId, this.state.projectName!);
+                pullRequestNames.push(branchName);
+            }
+
+            this.setState(prevState => ({
+                ...prevState,
+                pullRequestNames: pullRequestNames
             }));
         }
     }

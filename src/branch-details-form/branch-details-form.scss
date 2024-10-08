@@ -7,8 +7,8 @@
     display: flex;
 }
 
-.branch-details-form {
-    font-size: $fontSizeM;
+.justify-space-between {
+    justify-content: space-between;
 }
 
 .ms-Icon--GitLogo {
@@ -20,16 +20,21 @@
     margin-right: 4px;
 }
 
-.branch-details-form .branchNames  {
-    height: 60px;
-}
+.branch-details-form {
+    font-size: $fontSizeM;
 
-.branch-details-form .branchNames ul {
-    margin-block-start: 0px;
-    margin-block-end: 0px;
-}
+    &-body {
+        height: 80%;
+        overflow: auto;
+    }
 
-.branch-details-form .branchNames li {
-    list-style-type: disc;
-    list-style-position: inside;
+    .branchNames ul {
+        margin-block-start: 0px;
+        margin-block-end: 0px;
+    }
+    
+    .branchNames li {
+        list-style-type: disc;
+        list-style-position: inside;
+    }
 }
