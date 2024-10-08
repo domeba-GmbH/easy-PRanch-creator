@@ -24,13 +24,16 @@ import { BranchNameTemplateValidator } from "../branchNameTemplateValidator";
 import SettingsDocument from "../settingsDocument";
 import { StorageService } from "../storage-service";
 import { Constants } from "../constants";
+import { PullRequestNameTemplateValidator } from "../pullRequestNameTemplateValidator";
 
 interface ISettingsHubState {
     initialSettingsDocument: SettingsDocument | undefined;
     updatedSettingsDocument: SettingsDocument;
     isReady: boolean;
     isTemplateInvalid: boolean;
+    isPullRequestNameTemplateInvalid: boolean;
     defaultBranchNameTemplateErrorMessages: string[];
+    defaultPullRequestNameTemplateErrorMessages: string[];
     errorMessages: Record<string, string[]>;
     workItemTypes: string[];
     workItemFieldNames: string[];
@@ -44,6 +47,7 @@ interface IWorkItemStateSelection {
 
 class SettingsHub extends React.Component<{}, ISettingsHubState> {
     private branchNameTemplateValidator = new BranchNameTemplateValidator();
+    private pullRequestNameTemplateValidator = new PullRequestNameTemplateValidator();
     private nonAlphanumericCharactersReplacementSelectionOptions = new ObservableArray<IListBoxItem<string>>();
     private nonAlphanumericCharactersReplacementSelection = new DropdownSelection();
 
@@ -62,7 +66,9 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
             },
             isReady: false,
             isTemplateInvalid: false,
+            isPullRequestNameTemplateInvalid: false,
             defaultBranchNameTemplateErrorMessages: [],
+            defaultPullRequestNameTemplateErrorMessages: [],
             errorMessages: {},
             workItemTypes: [],
             workItemFieldNames: [],
@@ -332,6 +338,52 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                             </div>
                         </form>
                     </Card>
+
+                    <Card className="flex-grow margin-bottom-16" titleProps={{ text: "Pull Request creator", ariaLevel: 3 }}>
+                        <form>
+                            <FormItem
+                                label="Pull Request name template"
+                                message={this.getErrorMessageElement(this.state.defaultPullRequestNameTemplateErrorMessages)}
+                                error={this.state.isPullRequestNameTemplateInvalid}
+                                className="margin-bottom-8">
+                                <TextField
+                                    value={this.state.updatedSettingsDocument.defaultPullRequestNameTemplate}
+                                    disabled={!this.state.isReady}
+                                    onChange={(e, newValue) => {
+                                        const validatePullRequestNameTemplateResult =
+                                            this.pullRequestNameTemplateValidator.validatePullRequestNameTemplate(newValue, this.state.workItemFieldNames);
+                                        this.setState(prevState => ({
+                                            ...prevState,
+                                            updatedSettingsDocument: {
+                                                ...prevState.updatedSettingsDocument,
+                                                defaultPullRequestNameTemplate: newValue
+                                            },
+                                            defaultPullRequestNameTemplateErrorMessages: validatePullRequestNameTemplateResult.errorMessages,
+                                            isPullRequestNameTemplateInvalid: !validatePullRequestNameTemplateResult.isValid
+                                        }))
+                                    }}
+                                    width={TextFieldWidth.standard}
+                                />
+                            </FormItem>
+
+                            <FormItem className="margin-top-8 margin-bottom-8">
+                                <Checkbox
+                                    label="Create Pull Request by default"
+                                    checked={this.state.updatedSettingsDocument.createPullRequestByDefault}
+                                    disabled={!this.state.isReady}
+                                    onChange={(event, checked) => {
+                                        this.setState(prevState => ({
+                                            ...prevState,
+                                            updatedSettingsDocument: {
+                                                ...prevState.updatedSettingsDocument,
+                                                createPullRequestByDefault: checked,
+                                            }
+                                        }))
+                                    }}
+                                />
+                            </FormItem>
+                        </form>
+                    </Card>
                 </div>
             </Page>
         );
@@ -360,7 +412,9 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 onActivate: () => {
                     this.save()
                 },
-                disabled: this.isSettingsDocumentEqual(this.state.initialSettingsDocument, this.state.updatedSettingsDocument) || this.state.isTemplateInvalid,
+                disabled: this.isSettingsDocumentEqual(this.state.initialSettingsDocument, this.state.updatedSettingsDocument)
+                    || this.state.isTemplateInvalid
+                    || this.state.isPullRequestNameTemplateInvalid,
                 iconProps: {
                     iconName: 'Save'
                 },
