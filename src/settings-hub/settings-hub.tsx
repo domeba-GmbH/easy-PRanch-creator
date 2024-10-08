@@ -431,7 +431,9 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
         if (initialSettingsDocument.defaultBranchNameTemplate !== updatedSettingsDocument.defaultBranchNameTemplate ||
             initialSettingsDocument.lowercaseBranchName !== updatedSettingsDocument.lowercaseBranchName ||
             initialSettingsDocument.nonAlphanumericCharactersReplacement !== updatedSettingsDocument.nonAlphanumericCharactersReplacement ||
-            initialSettingsDocument.updateWorkItemState !== updatedSettingsDocument.updateWorkItemState) {
+            initialSettingsDocument.updateWorkItemState !== updatedSettingsDocument.updateWorkItemState ||
+            initialSettingsDocument.defaultPullRequestNameTemplate !== updatedSettingsDocument.defaultPullRequestNameTemplate ||
+            initialSettingsDocument.createPullRequestByDefault !== updatedSettingsDocument.createPullRequestByDefault) {
             return false;
         }
 
