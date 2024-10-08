@@ -35,6 +35,10 @@ function createBranchFromWorkItem() {
                     if (result !== undefined) {
                         workItems.forEach((id: number) => {
                             branchCreator.createBranch(id, result.repositoryId, result.sourceBranchName, project, gitBaseUrl);
+                            .then(branch => {
+                                if (branch !== undefined && result.createPullRequests)
+                                    pullRequestCreator.createPullRequest(id, result.repositoryId, branch, result.sourceBranchName, project)
+                            })
                         });
                     }
                 }
