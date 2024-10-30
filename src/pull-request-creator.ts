@@ -35,11 +35,14 @@ export class PullRequestCreator {
             project.id
         );
 
+        const pullRequestTemplate = await this.getPRTemplate(gitRestClient, repositoryId, project.id);
+
         let pullRequest = {
             title: pullRequestTitle,
             sourceRefName: `refs/heads/${sourceBranchName}`,
             targetRefName: `refs/heads/${targetBranchName}`,
             isDraft: createAsDraft,
+            description: pullRequestTemplate ?? ""
         } as GitPullRequest;
 
         pullRequest = await gitRestClient.createPullRequest(pullRequest, repositoryId, project.id);
@@ -116,5 +119,21 @@ export class PullRequestCreator {
         ];
 
         await workItemTrackingRestClient.updateWorkItem(document, workItemId);
+    }
+
+    private async getPRTemplate(
+        gitRestClient: GitRestClient,
+        repositoryId: string,
+        projectId: string
+    ) : Promise<string | undefined> {
+        try 
+        {
+            const response = await gitRestClient.getItem(repositoryId, "/.azuredevops/pull_request_template.md", projectId, undefined, undefined, undefined, undefined, undefined, undefined, true);
+            return response.content;
+        }
+        catch {
+            return undefined;
+        }
+
     }
 }

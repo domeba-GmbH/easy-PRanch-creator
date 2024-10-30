@@ -107,7 +107,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                             />
                             <div className="absolute">
                                 <Checkbox
-                                    label="Create as drafts"
+                                    label="Create as draft"
                                     checked={this.state.createPullRequestsAsDrafts}
                                     disabled={!this.state.ready || !this.state.createPullRequests}
                                     onChange={(event, checked) => {
