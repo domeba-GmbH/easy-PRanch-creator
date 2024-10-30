@@ -10,7 +10,10 @@ export class Constants {
         lowercaseBranchName: false,
         id: "",
         updateWorkItemState: false,
-        workItemState: {}
+        workItemState: {},
+        defaultPullRequestNameTemplate: Constants.DefaultPullRequestNameTemplate,
+        createPullRequestByDefault: false,
+        createPullRequestsAsDrafts: false,
     };
 
     public static NonAlphanumericCharactersReplacementSelectionOptions = [

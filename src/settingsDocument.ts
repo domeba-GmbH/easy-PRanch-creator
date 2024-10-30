@@ -3,7 +3,7 @@ export interface BranchNameTemplate {
     value: string;
 }
 
-export interface WorkItemStateSetting{
+export interface WorkItemStateSetting {
     isActive: boolean;
     value: string;
 }
@@ -17,4 +17,7 @@ export default interface SettingsDocument {
     lowercaseBranchName: boolean;
     updateWorkItemState: boolean;
     workItemState: Record<string, WorkItemStateSetting>;
+    defaultPullRequestNameTemplate: string;
+    createPullRequestByDefault: boolean;
+    createPullRequestsAsDrafts: boolean;
 }

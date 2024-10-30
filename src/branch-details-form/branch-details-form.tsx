@@ -19,6 +19,7 @@ export interface ISelectBranchDetailsResult {
     repositoryId: string;
     sourceBranchName: string;
     createPullRequests: boolean;
+    createPullRequestsAsDrafts: boolean;
 }
 
 interface ISelectBranchDetailsState {
@@ -29,6 +30,7 @@ interface ISelectBranchDetailsState {
     ready: boolean;
     branchNames: string[];
     createPullRequests?: boolean;
+    createPullRequestsAsDrafts?: boolean;
     pullRequestNames: string[];
 }
 
@@ -52,6 +54,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
 
             this.setState({
                 createPullRequests: settingsDocument.createPullRequestByDefault,
+                createPullRequestsAsDrafts: settingsDocument.createPullRequestsAsDrafts,
                 projectName: config.projectName,
                 workItems: config.workItems,
                 selectedRepositoryId: config.initialValue,
@@ -91,16 +94,28 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                         </div>
                     </div>
                     <hr></hr>
-                    <div className="flex-row justify-space-between">
+                    <div className="flex-row flex-center justify-space-between">
                         <p>Pull Request</p>
-                        <Checkbox
-                            label="Create Pull Request"
-                            checked={this.state.createPullRequests}
-                            disabled={!this.state.ready}
-                            onChange={(event, checked) => {
-                                this.setState({ createPullRequests: checked });
-                            }}
-                        />
+                        <div className="relative">
+                            <Checkbox
+                                label="Create Pull Request"
+                                checked={this.state.createPullRequests}
+                                disabled={!this.state.ready}
+                                onChange={(event, checked) => {
+                                    this.setState({ createPullRequests: checked });
+                                }}
+                            />
+                            <div className="absolute">
+                                <Checkbox
+                                    label="Create as drafts"
+                                    checked={this.state.createPullRequestsAsDrafts}
+                                    disabled={!this.state.ready || !this.state.createPullRequests}
+                                    onChange={(event, checked) => {
+                                        this.setState({ createPullRequestsAsDrafts: checked });
+                                    }}
+                                />
+                            </div>
+                        </div>
                     </div>
                     {this.state.createPullRequests && (
                         <div className="branchNames flex-column scroll-auto">
@@ -126,6 +141,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                                           repositoryId: this.state.selectedRepositoryId,
                                           sourceBranchName: this.state.sourceBranchName,
                                           createPullRequests: this.state.createPullRequests ?? false,
+                                          createPullRequestsAsDrafts: this.state.createPullRequestsAsDrafts ?? false,
                                       }
                                     : undefined
                             )

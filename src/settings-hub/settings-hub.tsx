@@ -1,11 +1,10 @@
 import "./settings-hub.scss";
 
+import * as SDK from "azure-devops-extension-sdk";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import * as SDK from "azure-devops-extension-sdk";
 
 import { CommonServiceIds, getClient, IProjectPageService } from "azure-devops-extension-api";
-import { CoreRestClient } from "azure-devops-extension-api/Core";
 import { GetFieldsExpand, WorkItemTrackingRestClient } from "azure-devops-extension-api/WorkItemTracking";
 
 import { Card } from "azure-devops-ui/Card";
@@ -21,10 +20,10 @@ import { TextField, TextFieldWidth } from "azure-devops-ui/TextField";
 import { DropdownSelection } from "azure-devops-ui/Utilities/DropdownSelection";
 
 import { BranchNameTemplateValidator } from "../branchNameTemplateValidator";
-import SettingsDocument from "../settingsDocument";
-import { StorageService } from "../storage-service";
 import { Constants } from "../constants";
 import { PullRequestNameTemplateValidator } from "../pullRequestNameTemplateValidator";
+import SettingsDocument from "../settingsDocument";
+import { StorageService } from "../storage-service";
 
 interface ISettingsHubState {
     initialSettingsDocument: SettingsDocument | undefined;
@@ -62,7 +61,10 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 lowercaseBranchName: false,
                 nonAlphanumericCharactersReplacement: "",
                 updateWorkItemState: false,
-                workItemState: {}
+                workItemState: {},
+                defaultPullRequestNameTemplate: "",
+                createPullRequestByDefault: false,
+                createPullRequestsAsDrafts: false,
             },
             isReady: false,
             isTemplateInvalid: false,
@@ -72,7 +74,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
             errorMessages: {},
             workItemTypes: [],
             workItemFieldNames: [],
-            workItemStates: {}
+            workItemStates: {},
         };
     }
 
@@ -88,11 +90,11 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 const workItemFieldNames = await this.getWorkItemFieldNames(project.name);
                 const workItemStates = await this.getWorkItemStates(project.name, workItemTypes, settingsDocument);
 
-                workItemTypes.forEach(workItemType => {
+                workItemTypes.forEach((workItemType) => {
                     if (!(workItemType in settingsDocument.branchNameTemplates)) {
                         settingsDocument.branchNameTemplates[workItemType] = {
                             isActive: false,
-                            value: Constants.DefaultBranchNameTemplate
+                            value: Constants.DefaultBranchNameTemplate,
                         };
                     }
 
@@ -101,15 +103,15 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                     }
                 });
 
-                this.setState(prevState => ({
+                this.setState((prevState) => ({
                     ...prevState,
                     initialSettingsDocument: settingsDocument,
                     updatedSettingsDocument: settingsDocument,
                     workItemTypes: workItemTypes,
                     workItemFieldNames: workItemFieldNames,
                     workItemStates: workItemStates,
-                    isReady: true
-                }))
+                    isReady: true,
+                }));
 
                 this.loadNonAlphanumericCharactersReplacementSelectionOptions();
             }
@@ -130,27 +132,35 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                     <HeaderCommandBar items={this.getCommandBarItems()} />
                 </CustomHeader>
                 <div className="page-content">
-                    <Card className="flex-grow margin-bottom-16" titleProps={{ text: "Template Branch name", ariaLevel: 3 }}>
+                    <Card
+                        className="flex-grow margin-bottom-16"
+                        titleProps={{ text: "Template Branch name", ariaLevel: 3 }}
+                    >
                         <form>
                             <FormItem
                                 label="Template"
                                 message={this.getErrorMessageElement(this.state.defaultBranchNameTemplateErrorMessages)}
                                 error={this.state.isTemplateInvalid}
-                                className="margin-bottom-8">
+                                className="margin-bottom-8"
+                            >
                                 <TextField
                                     value={this.state.updatedSettingsDocument.defaultBranchNameTemplate}
                                     disabled={!this.state.isReady}
                                     onChange={(e, newValue) => {
-                                        const validateBranchNameTemplateResult = this.branchNameTemplateValidator.validateBranchNameTemplate(newValue, this.state.workItemFieldNames);
-                                        this.setState(prevState => ({
+                                        const validateBranchNameTemplateResult = this.branchNameTemplateValidator.validateBranchNameTemplate(
+                                            newValue,
+                                            this.state.workItemFieldNames
+                                        );
+                                        this.setState((prevState) => ({
                                             ...prevState,
                                             updatedSettingsDocument: {
                                                 ...prevState.updatedSettingsDocument,
-                                                defaultBranchNameTemplate: newValue
+                                                defaultBranchNameTemplate: newValue,
                                             },
-                                            defaultBranchNameTemplateErrorMessages: validateBranchNameTemplateResult.errorMessages,
-                                            isTemplateInvalid: !validateBranchNameTemplateResult.isValid
-                                        }))
+                                            defaultBranchNameTemplateErrorMessages:
+                                                validateBranchNameTemplateResult.errorMessages,
+                                            isTemplateInvalid: !validateBranchNameTemplateResult.isValid,
+                                        }));
                                     }}
                                     width={TextFieldWidth.standard}
                                 />
@@ -159,66 +169,83 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                 <div className="margin-top-16 margin-bottom-8">
                                     <span>Template Overrides</span>
                                 </div>
-                                {
-                                    this.state.workItemTypes.map(workItemType => {
-                                        return (
-                                            <FormItem
-                                                key={workItemType}
-                                                message={this.getErrorMessageElement(this.state.errorMessages[workItemType])}
-                                                error={this.state.isTemplateInvalid}
-                                                className="margin-bottom-8">
-                                                <Checkbox
-                                                    label={workItemType}
-                                                    checked={this.state.updatedSettingsDocument.branchNameTemplates[workItemType].isActive}
+                                {this.state.workItemTypes.map((workItemType) => {
+                                    return (
+                                        <FormItem
+                                            key={workItemType}
+                                            message={this.getErrorMessageElement(
+                                                this.state.errorMessages[workItemType]
+                                            )}
+                                            error={this.state.isTemplateInvalid}
+                                            className="margin-bottom-8"
+                                        >
+                                            <Checkbox
+                                                label={workItemType}
+                                                checked={
+                                                    this.state.updatedSettingsDocument.branchNameTemplates[workItemType]
+                                                        .isActive
+                                                }
+                                                disabled={!this.state.isReady}
+                                                onChange={(event, checked) => {
+                                                    this.setState((prevState) => ({
+                                                        ...prevState,
+                                                        updatedSettingsDocument: {
+                                                            ...prevState.updatedSettingsDocument,
+                                                            branchNameTemplates: {
+                                                                ...prevState.updatedSettingsDocument
+                                                                    .branchNameTemplates,
+                                                                [workItemType]: {
+                                                                    ...prevState.updatedSettingsDocument
+                                                                        .branchNameTemplates[workItemType],
+                                                                    isActive: checked,
+                                                                },
+                                                            },
+                                                        },
+                                                    }));
+                                                }}
+                                            />
+                                            {this.state.updatedSettingsDocument.branchNameTemplates[workItemType]
+                                                .isActive ? (
+                                                <TextField
+                                                    value={
+                                                        this.state.updatedSettingsDocument.branchNameTemplates[
+                                                            workItemType
+                                                        ].value
+                                                    }
                                                     disabled={!this.state.isReady}
-                                                    onChange={(event, checked) => {
-                                                        this.setState(prevState => ({
+                                                    onChange={(e, newValue) => {
+                                                        const validateBranchNameTemplateResult = this.branchNameTemplateValidator.validateBranchNameTemplate(
+                                                            newValue,
+                                                            this.state.workItemFieldNames
+                                                        );
+                                                        this.setState((prevState) => ({
                                                             ...prevState,
                                                             updatedSettingsDocument: {
                                                                 ...prevState.updatedSettingsDocument,
                                                                 branchNameTemplates: {
-                                                                    ...prevState.updatedSettingsDocument.branchNameTemplates,
+                                                                    ...prevState.updatedSettingsDocument
+                                                                        .branchNameTemplates,
                                                                     [workItemType]: {
-                                                                        ...prevState.updatedSettingsDocument.branchNameTemplates[workItemType],
-                                                                        isActive: checked
-                                                                    }
-                                                                }
+                                                                        ...prevState.updatedSettingsDocument
+                                                                            .branchNameTemplates[workItemType],
+                                                                        value: newValue,
+                                                                    },
+                                                                },
                                                             },
-                                                        }))
+                                                            errorMessages: {
+                                                                ...prevState.errorMessages,
+                                                                [workItemType]:
+                                                                    validateBranchNameTemplateResult.errorMessages,
+                                                            },
+                                                            isTemplateInvalid: !validateBranchNameTemplateResult.isValid,
+                                                        }));
                                                     }}
+                                                    width={TextFieldWidth.standard}
                                                 />
-                                                {this.state.updatedSettingsDocument.branchNameTemplates[workItemType].isActive ?
-                                                    <TextField
-                                                        value={this.state.updatedSettingsDocument.branchNameTemplates[workItemType].value}
-                                                        disabled={!this.state.isReady}
-                                                        onChange={(e, newValue) => {
-                                                            const validateBranchNameTemplateResult = this.branchNameTemplateValidator.validateBranchNameTemplate(newValue, this.state.workItemFieldNames);
-                                                            this.setState(prevState => ({
-                                                                ...prevState,
-                                                                updatedSettingsDocument: {
-                                                                    ...prevState.updatedSettingsDocument,
-                                                                    branchNameTemplates: {
-                                                                        ...prevState.updatedSettingsDocument.branchNameTemplates,
-                                                                        [workItemType]: {
-                                                                            ...prevState.updatedSettingsDocument.branchNameTemplates[workItemType],
-                                                                            value: newValue
-                                                                        }
-                                                                    }
-                                                                },
-                                                                errorMessages: {
-                                                                    ...prevState.errorMessages,
-                                                                    [workItemType]: validateBranchNameTemplateResult.errorMessages
-                                                                },
-                                                                isTemplateInvalid: !validateBranchNameTemplateResult.isValid
-                                                            }))
-                                                        }}
-                                                        width={TextFieldWidth.standard}
-                                                    />
-                                                    : null}
-                                            </FormItem>
-                                        )
-                                    })
-                                }
+                                            ) : null}
+                                        </FormItem>
+                                    );
+                                })}
                             </div>
                         </form>
                     </Card>
@@ -231,14 +258,17 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     disabled={!this.state.isReady}
                                     items={this.nonAlphanumericCharactersReplacementSelectionOptions}
                                     selection={this.nonAlphanumericCharactersReplacementSelection}
-                                    onSelect={(event: React.SyntheticEvent<HTMLElement>, item: IListBoxItem<string>) => {
-                                        this.setState(prevState => ({
+                                    onSelect={(
+                                        event: React.SyntheticEvent<HTMLElement>,
+                                        item: IListBoxItem<string>
+                                    ) => {
+                                        this.setState((prevState) => ({
                                             ...prevState,
                                             updatedSettingsDocument: {
                                                 ...prevState.updatedSettingsDocument,
                                                 nonAlphanumericCharactersReplacement: item.id,
-                                            }
-                                        }))
+                                            },
+                                        }));
                                     }}
                                 />
                             </FormItem>
@@ -248,13 +278,13 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     checked={this.state.updatedSettingsDocument.lowercaseBranchName}
                                     disabled={!this.state.isReady}
                                     onChange={(event, checked) => {
-                                        this.setState(prevState => ({
+                                        this.setState((prevState) => ({
                                             ...prevState,
                                             updatedSettingsDocument: {
                                                 ...prevState.updatedSettingsDocument,
                                                 lowercaseBranchName: checked,
-                                            }
-                                        }))
+                                            },
+                                        }));
                                     }}
                                 />
                             </FormItem>
@@ -268,99 +298,114 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     checked={this.state.updatedSettingsDocument.updateWorkItemState}
                                     disabled={!this.state.isReady}
                                     onChange={(event, checked) => {
-                                        this.setState(prevState => ({
+                                        this.setState((prevState) => ({
                                             ...prevState,
                                             updatedSettingsDocument: {
                                                 ...prevState.updatedSettingsDocument,
                                                 updateWorkItemState: checked,
-                                            }
-                                        }))
+                                            },
+                                        }));
                                     }}
                                 />
                             </FormItem>
                             <div className="margin-left-16">
-                            {
-                                this.state.workItemTypes.map(workItemType => {
+                                {this.state.workItemTypes.map((workItemType) => {
                                     if (this.state.updatedSettingsDocument.updateWorkItemState) {
                                         return (
-                                            <FormItem
-                                                key={workItemType}
-                                                className="margin-bottom-8">
+                                            <FormItem key={workItemType} className="margin-bottom-8">
                                                 <Checkbox
                                                     label={workItemType}
-                                                    checked={this.state.updatedSettingsDocument.workItemState[workItemType].isActive}
+                                                    checked={
+                                                        this.state.updatedSettingsDocument.workItemState[workItemType]
+                                                            .isActive
+                                                    }
                                                     disabled={!this.state.isReady}
                                                     onChange={(event, checked) => {
-                                                        this.setState(prevState => ({
+                                                        this.setState((prevState) => ({
                                                             ...prevState,
                                                             updatedSettingsDocument: {
                                                                 ...prevState.updatedSettingsDocument,
                                                                 workItemState: {
                                                                     ...prevState.updatedSettingsDocument.workItemState,
                                                                     [workItemType]: {
-                                                                        ...prevState.updatedSettingsDocument.workItemState[workItemType],
-                                                                        isActive: checked
-                                                                    }
-                                                                }
+                                                                        ...prevState.updatedSettingsDocument
+                                                                            .workItemState[workItemType],
+                                                                        isActive: checked,
+                                                                    },
+                                                                },
                                                             },
-                                                        }))
+                                                        }));
                                                     }}
                                                 />
-                                                {this.state.updatedSettingsDocument.workItemState[workItemType].isActive ?
+                                                {this.state.updatedSettingsDocument.workItemState[workItemType]
+                                                    .isActive ? (
                                                     <Dropdown
                                                         ariaLabel="WorkItem State"
                                                         placeholder="Select an Option"
                                                         disabled={!this.state.isReady}
                                                         items={this.state.workItemStates[workItemType].items}
                                                         selection={this.state.workItemStates[workItemType].selected}
-                                                        onSelect={(event: React.SyntheticEvent<HTMLElement>, item: IListBoxItem<string>) => {
-                                                            this.setState(prevState => ({
+                                                        onSelect={(
+                                                            event: React.SyntheticEvent<HTMLElement>,
+                                                            item: IListBoxItem<string>
+                                                        ) => {
+                                                            this.setState((prevState) => ({
                                                                 ...prevState,
                                                                 updatedSettingsDocument: {
                                                                     ...prevState.updatedSettingsDocument,
                                                                     workItemState: {
-                                                                        ...prevState.updatedSettingsDocument.workItemState,
+                                                                        ...prevState.updatedSettingsDocument
+                                                                            .workItemState,
                                                                         [workItemType]: {
-                                                                            ...prevState.updatedSettingsDocument.workItemState[workItemType],
-                                                                            value: item.id
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }))
+                                                                            ...prevState.updatedSettingsDocument
+                                                                                .workItemState[workItemType],
+                                                                            value: item.id,
+                                                                        },
+                                                                    },
+                                                                },
+                                                            }));
                                                         }}
                                                     />
-                                                : null}
+                                                ) : null}
                                             </FormItem>
-                                        )
+                                        );
                                     }
-                                })
-                            }
+                                })}
                             </div>
                         </form>
                     </Card>
 
-                    <Card className="flex-grow margin-bottom-16" titleProps={{ text: "Pull Request creator", ariaLevel: 3 }}>
+                    <Card
+                        className="flex-grow margin-bottom-16"
+                        titleProps={{ text: "Pull Request creator", ariaLevel: 3 }}
+                    >
                         <form>
                             <FormItem
                                 label="Pull Request name template"
-                                message={this.getErrorMessageElement(this.state.defaultPullRequestNameTemplateErrorMessages)}
+                                message={this.getErrorMessageElement(
+                                    this.state.defaultPullRequestNameTemplateErrorMessages
+                                )}
                                 error={this.state.isPullRequestNameTemplateInvalid}
-                                className="margin-bottom-8">
+                                className="margin-bottom-8"
+                            >
                                 <TextField
                                     value={this.state.updatedSettingsDocument.defaultPullRequestNameTemplate}
                                     disabled={!this.state.isReady}
                                     onChange={(e, newValue) => {
-                                        const validatePullRequestNameTemplateResult =
-                                            this.pullRequestNameTemplateValidator.validatePullRequestNameTemplate(newValue, this.state.workItemFieldNames);
-                                        this.setState(prevState => ({
+                                        const validatePullRequestNameTemplateResult = this.pullRequestNameTemplateValidator.validatePullRequestNameTemplate(
+                                            newValue,
+                                            this.state.workItemFieldNames
+                                        );
+                                        this.setState((prevState) => ({
                                             ...prevState,
                                             updatedSettingsDocument: {
                                                 ...prevState.updatedSettingsDocument,
-                                                defaultPullRequestNameTemplate: newValue
+                                                defaultPullRequestNameTemplate: newValue,
                                             },
-                                            defaultPullRequestNameTemplateErrorMessages: validatePullRequestNameTemplateResult.errorMessages,
-                                            isPullRequestNameTemplateInvalid: !validatePullRequestNameTemplateResult.isValid
-                                        }))
+                                            defaultPullRequestNameTemplateErrorMessages:
+                                                validatePullRequestNameTemplateResult.errorMessages,
+                                            isPullRequestNameTemplateInvalid: !validatePullRequestNameTemplateResult.isValid,
+                                        }));
                                     }}
                                     width={TextFieldWidth.standard}
                                 />
@@ -372,13 +417,30 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     checked={this.state.updatedSettingsDocument.createPullRequestByDefault}
                                     disabled={!this.state.isReady}
                                     onChange={(event, checked) => {
-                                        this.setState(prevState => ({
+                                        this.setState((prevState) => ({
                                             ...prevState,
                                             updatedSettingsDocument: {
                                                 ...prevState.updatedSettingsDocument,
                                                 createPullRequestByDefault: checked,
-                                            }
-                                        }))
+                                            },
+                                        }));
+                                    }}
+                                />
+                            </FormItem>
+
+                            <FormItem className="margin-top-8 margin-bottom-8">
+                                <Checkbox
+                                    label="Create Pull Request as Drafts by default"
+                                    checked={this.state.updatedSettingsDocument.createPullRequestsAsDrafts}
+                                    disabled={!this.state.isReady}
+                                    onChange={(event, checked) => {
+                                        this.setState((prevState) => ({
+                                            ...prevState,
+                                            updatedSettingsDocument: {
+                                                ...prevState.updatedSettingsDocument,
+                                                createPullRequestsAsDrafts: checked,
+                                            },
+                                        }));
                                     }}
                                 />
                             </FormItem>
@@ -395,11 +457,9 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
         }
         return (
             <ul className="margin-bottom-16">
-                {
-                    errorMessages.map((x, index) => {
-                        return <li key={index}>{x}</li>
-                    })
-                }
+                {errorMessages.map((x, index) => {
+                    return <li key={index}>{x}</li>;
+                })}
             </ul>
         );
     }
@@ -410,68 +470,96 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 id: "save",
                 text: "Save",
                 onActivate: () => {
-                    this.save()
+                    this.save();
                 },
-                disabled: this.isSettingsDocumentEqual(this.state.initialSettingsDocument, this.state.updatedSettingsDocument)
-                    || this.state.isTemplateInvalid
-                    || this.state.isPullRequestNameTemplateInvalid,
+                disabled:
+                    this.isSettingsDocumentEqual(
+                        this.state.initialSettingsDocument,
+                        this.state.updatedSettingsDocument
+                    ) ||
+                    this.state.isTemplateInvalid ||
+                    this.state.isPullRequestNameTemplateInvalid,
                 iconProps: {
-                    iconName: 'Save'
+                    iconName: "Save",
                 },
-                isPrimary: true
-            }
+                isPrimary: true,
+            },
         ];
     }
 
-    private isSettingsDocumentEqual(initialSettingsDocument: SettingsDocument | undefined, updatedSettingsDocument: SettingsDocument): boolean {
+    private isSettingsDocumentEqual(
+        initialSettingsDocument: SettingsDocument | undefined,
+        updatedSettingsDocument: SettingsDocument
+    ): boolean {
         if (initialSettingsDocument === undefined) {
             return true;
         }
 
-        if (initialSettingsDocument.defaultBranchNameTemplate !== updatedSettingsDocument.defaultBranchNameTemplate ||
+        if (
+            initialSettingsDocument.defaultBranchNameTemplate !== updatedSettingsDocument.defaultBranchNameTemplate ||
             initialSettingsDocument.lowercaseBranchName !== updatedSettingsDocument.lowercaseBranchName ||
-            initialSettingsDocument.nonAlphanumericCharactersReplacement !== updatedSettingsDocument.nonAlphanumericCharactersReplacement ||
+            initialSettingsDocument.nonAlphanumericCharactersReplacement !==
+                updatedSettingsDocument.nonAlphanumericCharactersReplacement ||
             initialSettingsDocument.updateWorkItemState !== updatedSettingsDocument.updateWorkItemState ||
-            initialSettingsDocument.defaultPullRequestNameTemplate !== updatedSettingsDocument.defaultPullRequestNameTemplate ||
-            initialSettingsDocument.createPullRequestByDefault !== updatedSettingsDocument.createPullRequestByDefault) {
+            initialSettingsDocument.defaultPullRequestNameTemplate !==
+                updatedSettingsDocument.defaultPullRequestNameTemplate ||
+            initialSettingsDocument.createPullRequestByDefault !== updatedSettingsDocument.createPullRequestByDefault ||
+            initialSettingsDocument.createPullRequestsAsDrafts !== updatedSettingsDocument.createPullRequestsAsDrafts
+        ) {
             return false;
         }
 
         for (const workItemType in initialSettingsDocument.branchNameTemplates) {
-            if (!(workItemType in updatedSettingsDocument.branchNameTemplates) ||
-                updatedSettingsDocument.branchNameTemplates[workItemType].isActive !== initialSettingsDocument.branchNameTemplates[workItemType].isActive ||
-                updatedSettingsDocument.branchNameTemplates[workItemType].value !== initialSettingsDocument.branchNameTemplates[workItemType].value) {
+            if (
+                !(workItemType in updatedSettingsDocument.branchNameTemplates) ||
+                updatedSettingsDocument.branchNameTemplates[workItemType].isActive !==
+                    initialSettingsDocument.branchNameTemplates[workItemType].isActive ||
+                updatedSettingsDocument.branchNameTemplates[workItemType].value !==
+                    initialSettingsDocument.branchNameTemplates[workItemType].value
+            ) {
                 return false;
             }
-        };
+        }
 
         for (const workItemType in initialSettingsDocument.workItemState) {
-            if (!(workItemType in updatedSettingsDocument.workItemState) ||
-                updatedSettingsDocument.workItemState[workItemType].isActive !== initialSettingsDocument.workItemState[workItemType].isActive ||
-                updatedSettingsDocument.workItemState[workItemType].value !== initialSettingsDocument.workItemState[workItemType].value) {
+            if (
+                !(workItemType in updatedSettingsDocument.workItemState) ||
+                updatedSettingsDocument.workItemState[workItemType].isActive !==
+                    initialSettingsDocument.workItemState[workItemType].isActive ||
+                updatedSettingsDocument.workItemState[workItemType].value !==
+                    initialSettingsDocument.workItemState[workItemType].value
+            ) {
                 return false;
             }
-        };
+        }
 
         return true;
     }
 
     private loadNonAlphanumericCharactersReplacementSelectionOptions() {
-        this.nonAlphanumericCharactersReplacementSelectionOptions.push(...Constants.NonAlphanumericCharactersReplacementSelectionOptions.map(t => { return { id: t.id, data: t.id, text: t.text } }));
+        this.nonAlphanumericCharactersReplacementSelectionOptions.push(
+            ...Constants.NonAlphanumericCharactersReplacementSelectionOptions.map((t) => {
+                return { id: t.id, data: t.id, text: t.text };
+            })
+        );
 
-        const index = Constants.NonAlphanumericCharactersReplacementSelectionOptions.findIndex(x => x.id === this.state.updatedSettingsDocument.nonAlphanumericCharactersReplacement)
+        const index = Constants.NonAlphanumericCharactersReplacementSelectionOptions.findIndex(
+            (x) => x.id === this.state.updatedSettingsDocument.nonAlphanumericCharactersReplacement
+        );
         this.nonAlphanumericCharactersReplacementSelection.select(index >= 0 ? index : 0);
     }
 
     private async getWorkItemTypes(projectName: string): Promise<string[]> {
         const workItemTrackingRestClient = getClient(WorkItemTrackingRestClient);
         const workItemTypeCategories = await workItemTrackingRestClient.getWorkItemTypeCategories(projectName);
-        const hiddenCategories = workItemTypeCategories.find(x => x.referenceName === "Microsoft.HiddenCategory");
+        const hiddenCategories = workItemTypeCategories.find((x) => x.referenceName === "Microsoft.HiddenCategory");
         if (hiddenCategories) {
             return workItemTypeCategories
-                .map(x => x.workItemTypes)
-                .reduce(function (a, b) { return a.concat(b); }, [])
-                .filter(x => hiddenCategories.workItemTypes.findIndex(t => t.name === x.name) === -1)
+                .map((x) => x.workItemTypes)
+                .reduce(function(a, b) {
+                    return a.concat(b);
+                }, [])
+                .filter((x) => hiddenCategories.workItemTypes.findIndex((t) => t.name === x.name) === -1)
                 .map((x) => x.name)
                 .sort();
         }
@@ -485,17 +573,32 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
         return workItemFields.map((x) => x.referenceName);
     }
 
-    private async getWorkItemStates(projectName: string, workItemTypes: string[], settingsDocument: SettingsDocument): Promise<Record<string, IWorkItemStateSelection>> {
+    private async getWorkItemStates(
+        projectName: string,
+        workItemTypes: string[],
+        settingsDocument: SettingsDocument
+    ): Promise<Record<string, IWorkItemStateSelection>> {
         const workItemTrackingRestClient = getClient(WorkItemTrackingRestClient);
         let workItemStates: Record<string, IWorkItemStateSelection> = {};
-        for await (const workItemType of workItemTypes)
-        {
-            const workItemTypeStates = await workItemTrackingRestClient.getWorkItemTypeStates(projectName, workItemType);
-            workItemStates[workItemType] = { items: new ObservableArray<IListBoxItem<string>>(), selected: new DropdownSelection() };
-            workItemStates[workItemType].items.push(...workItemTypeStates.map(x => { return { id: x.name, data: x.name, text: x.name }}));
+        for await (const workItemType of workItemTypes) {
+            const workItemTypeStates = await workItemTrackingRestClient.getWorkItemTypeStates(
+                projectName,
+                workItemType
+            );
+            workItemStates[workItemType] = {
+                items: new ObservableArray<IListBoxItem<string>>(),
+                selected: new DropdownSelection(),
+            };
+            workItemStates[workItemType].items.push(
+                ...workItemTypeStates.map((x) => {
+                    return { id: x.name, data: x.name, text: x.name };
+                })
+            );
 
-            const index = settingsDocument.workItemState[workItemType] ? workItemTypeStates.findIndex(x => x.name === settingsDocument.workItemState[workItemType].value) : -1;
-            workItemStates[workItemType].selected.select(index >= 0 ? index : 0);    
+            const index = settingsDocument.workItemState[workItemType]
+                ? workItemTypeStates.findIndex((x) => x.name === settingsDocument.workItemState[workItemType].value)
+                : -1;
+            workItemStates[workItemType].selected.select(index >= 0 ? index : 0);
         }
         return workItemStates;
     }
@@ -506,13 +609,13 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
         const updatedSettingsDocument = await storageService.setSettings({
             ...this.state.updatedSettingsDocument,
             id: settingsDocument.id,
-            __etag: settingsDocument.__etag
+            __etag: settingsDocument.__etag,
         });
-        this.setState(prevState => ({
+        this.setState((prevState) => ({
             ...prevState,
             initialSettingsDocument: updatedSettingsDocument,
-            isDirty: false
-        }))
+            isDirty: false,
+        }));
     }
 }
 
