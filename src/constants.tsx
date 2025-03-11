@@ -14,6 +14,7 @@ export class Constants {
         defaultPullRequestNameTemplate: Constants.DefaultPullRequestNameTemplate,
         createPullRequestByDefault: false,
         createPullRequestsAsDrafts: false,
+        defaultRepositoryName: ''
     };
 
     public static NonAlphanumericCharactersReplacementSelectionOptions = [

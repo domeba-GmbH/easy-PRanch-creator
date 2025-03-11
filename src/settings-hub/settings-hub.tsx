@@ -65,6 +65,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 defaultPullRequestNameTemplate: "",
                 createPullRequestByDefault: false,
                 createPullRequestsAsDrafts: false,
+                defaultRepositoryName: "",
             },
             isReady: false,
             isTemplateInvalid: false,
@@ -290,7 +291,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                             </FormItem>
                         </form>
                     </Card>
-                    <Card className="flex-grow">
+                    <Card className="flex-grow margin-bottom-16">
                         <form>
                             <FormItem className="margin-top-8 margin-bottom-8">
                                 <Checkbox
@@ -372,6 +373,51 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     }
                                 })}
                             </div>
+                        </form>
+                    </Card>
+
+                    <Card className="flex-grow margin-bottom-16">
+                        <form>
+                            <FormItem label="Default repository" className="margin-bottom-8">
+                                <TextField
+                                    value={this.state.updatedSettingsDocument.defaultRepositoryName}
+                                    disabled={!this.state.isReady}
+                                    onChange={(e, newValue) => {
+                                        this.setState((prevState) => ({
+                                            ...prevState,
+                                            updatedSettingsDocument: {
+                                                ...prevState.updatedSettingsDocument,
+                                                defaultRepositoryName: newValue,
+                                            },
+                                        }));
+                                    }}
+                                    width={TextFieldWidth.standard}
+                                />
+                            </FormItem>
+                        </form>
+                    </Card>
+
+                    <Card
+                        className="flex-grow margin-bottom-16"
+                        titleProps={{ text: "Pull Request creator", ariaLevel: 3 }}
+                    >
+                        <form>
+                            <FormItem label="Default repository" className="margin-bottom-8">
+                                <TextField
+                                    value={this.state.updatedSettingsDocument.defaultRepositoryName}
+                                    disabled={!this.state.isReady}
+                                    onChange={(e, newValue) => {
+                                        this.setState((prevState) => ({
+                                            ...prevState,
+                                            updatedSettingsDocument: {
+                                                ...prevState.updatedSettingsDocument,
+                                                defaultRepositoryName: newValue,
+                                            },
+                                        }));
+                                    }}
+                                    width={TextFieldWidth.standard}
+                                />
+                            </FormItem>
                         </form>
                     </Card>
 
@@ -504,7 +550,8 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
             initialSettingsDocument.defaultPullRequestNameTemplate !==
                 updatedSettingsDocument.defaultPullRequestNameTemplate ||
             initialSettingsDocument.createPullRequestByDefault !== updatedSettingsDocument.createPullRequestByDefault ||
-            initialSettingsDocument.createPullRequestsAsDrafts !== updatedSettingsDocument.createPullRequestsAsDrafts
+            initialSettingsDocument.createPullRequestsAsDrafts !== updatedSettingsDocument.createPullRequestsAsDrafts ||
+            initialSettingsDocument.defaultRepositoryName !== updatedSettingsDocument.defaultRepositoryName
         ) {
             return false;
         }

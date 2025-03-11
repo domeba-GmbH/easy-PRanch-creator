@@ -20,4 +20,5 @@ export default interface SettingsDocument {
     defaultPullRequestNameTemplate: string;
     createPullRequestByDefault: boolean;
     createPullRequestsAsDrafts: boolean;
+    defaultRepositoryName: string;
 }

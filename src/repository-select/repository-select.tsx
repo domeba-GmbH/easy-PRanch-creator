@@ -8,6 +8,7 @@ import { ObservableArray } from "azure-devops-ui/Core/Observable";
 import { IListBoxItem } from "azure-devops-ui/ListBox";
 import { ITableColumn, SimpleTableCell } from "azure-devops-ui/Table";
 import { Icon } from "azure-devops-ui/Icon";
+import { StorageService } from "../storage-service";
 
 export interface IRepositorySelectProps {
     projectName?: string;
@@ -87,8 +88,14 @@ export class RepositorySelect extends React.Component<IRepositorySelectProps, IR
         this.repositories.push(...repositories.map(t => { return { id: t.id, data: t.id, text: t.name } }));
 
         if (this.repositories.length > 0) {
-            this.setSelectedRepositoryId(repositories[0].id);
-            this.repositorySelection.select(0);
+            const storageService = new StorageService();
+            const defaultRepositoryName = (await storageService.getSettings()).defaultRepositoryName
+            const defaultRepository = repositories.find(repository => defaultRepositoryName === repository.name)
+    
+            if (defaultRepository !== undefined) {
+                this.setSelectedRepositoryId(defaultRepository.id)
+                this.repositorySelection.select(repositories.indexOf(defaultRepository))
+            }
         }
     }
 

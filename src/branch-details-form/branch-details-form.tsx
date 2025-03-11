@@ -96,7 +96,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                     <hr></hr>
                     <div className="flex-row flex-center justify-space-between">
                         <p>Pull Request</p>
-                        <div className="relative">
+                        <div className="flex-row">
                             <Checkbox
                                 label="Create Pull Request"
                                 checked={this.state.createPullRequests}
@@ -105,7 +105,6 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                                     this.setState({ createPullRequests: checked });
                                 }}
                             />
-                            <div className="absolute">
                                 <Checkbox
                                     label="Create as draft"
                                     checked={this.state.createPullRequestsAsDrafts}
@@ -114,7 +113,6 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                                         this.setState({ createPullRequestsAsDrafts: checked });
                                     }}
                                 />
-                            </div>
                         </div>
                     </div>
                     {this.state.createPullRequests && (
