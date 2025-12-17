@@ -9,7 +9,7 @@ import SettingsDocument from "./settingsDocument";
 
 export class BranchCreator {
 
-    public async createBranch(workItemId: number, repositoryId: string, sourceBranchName: string, project: IProjectInfo, gitBaseUrl: string): Promise<void> {
+    public async createBranch(workItemId: number, repositoryId: string, sourceBranchName: string, project: IProjectInfo, gitBaseUrl: string): Promise<string | undefined> {
         const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
         const globalMessagesSvc = await SDK.getService<IGlobalMessagesService>(CommonServiceIds.GlobalMessagesService);
         const gitRestClient = getClient(GitRestClient);
@@ -53,6 +53,8 @@ export class BranchCreator {
         });
 
         navigationService.openNewWindow(branchUrl, "");
+
+        return branchName;
     }
 
     public async getBranchName(workItemTrackingRestClient: WorkItemTrackingRestClient, settingsDocument: SettingsDocument, workItemId: number, project: string, sourceBranchName: string): Promise<string> {

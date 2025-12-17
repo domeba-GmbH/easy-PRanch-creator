@@ -4,6 +4,7 @@ import { CoreRestClient } from "azure-devops-extension-api/Core";
 
 import { BranchCreator } from "../branch-creator";
 import { ISelectBranchDetailsResult } from "../branch-details-form/branch-details-form";
+import { PullRequestCreator } from "../pull-request-creator";
 
 function createBranchFromWorkItem() {
     "use strict";
@@ -22,6 +23,7 @@ function createBranchFromWorkItem() {
             const gitBaseUrl = `${hostBaseUrl}${(hostBaseUrl.toLowerCase().indexOf(host.name.toLowerCase()) == -1 ? `${host.name}/` : "")}${project.name}/_git`;
 
             const branchCreator = new BranchCreator();
+            const pullRequestCreator = new PullRequestCreator();
             const dialogService = await SDK.getService<IHostPageLayoutService>(CommonServiceIds.HostPageLayoutService);
             const workItems = getWorkItemIds(actionContext);
             dialogService.openCustomDialog<ISelectBranchDetailsResult | undefined>(SDK.getExtensionContext().id + ".branch-details-form", {
@@ -34,7 +36,7 @@ function createBranchFromWorkItem() {
                 onClose: (result: ISelectBranchDetailsResult | undefined) => {
                     if (result !== undefined) {
                         workItems.forEach((id: number) => {
-                            branchCreator.createBranch(id, result.repositoryId, result.sourceBranchName, project, gitBaseUrl);
+                            branchCreator.createBranch(id, result.repositoryId, result.sourceBranchName, project, gitBaseUrl)
                             .then(branch => {
                                 if (branch !== undefined && result.createPullRequests)
                                     pullRequestCreator.createPullRequest(id, result.repositoryId, branch, result.sourceBranchName, project, result.createPullRequestsAsDrafts)

@@ -2,6 +2,7 @@ import SettingsDocument from "./settingsDocument";
 
 export class Constants {
     public static DefaultBranchNameTemplate: string = "feature/${System.Id}-${System.Title}";
+    public static DefaultPullRequestNameTemplate: string = "[${System.WorkItemType} ${System.Id}] ${System.Title}";
 
     public static DefaultSettingsDocument: SettingsDocument = {
         defaultBranchNameTemplate: Constants.DefaultBranchNameTemplate,
@@ -14,12 +15,11 @@ export class Constants {
         defaultPullRequestNameTemplate: Constants.DefaultPullRequestNameTemplate,
         createPullRequestByDefault: false,
         createPullRequestsAsDrafts: false,
-        defaultRepositoryName: ''
+        defaultRepositoryName: "",
     };
 
     public static NonAlphanumericCharactersReplacementSelectionOptions = [
         { id: "_", text: "_" },
-        { id: "-", text: "-" }
+        { id: "-", text: "-" },
     ];
-
 }
