@@ -99,22 +99,11 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                             return (
                                 <TextField
                                     key={workItemId}
-                                    value={name}
-                                    prefixIconProps={{
-                                        render: () => {
-                                            return prefix === "" ? (
-                                                <></>
-                                            ) : (
-                                                <span className="padding-left-8 secondary-text">{prefix}</span>
-                                            );
-                                        },
-                                    }}
+                                    value={prefix + name}
                                     onChange={(_, newValue) => {
                                         const branchNames = this.state.branchNames;
 
-                                        if (newValue.startsWith(prefix)) {
-                                            newValue = newValue.slice(prefix.length);
-                                        }
+                                        newValue = this.trimPrefix(newValue, prefix);
 
                                         if (this.state.branchNameMaxLength) {
                                             newValue = newValue.slice(0, this.state.branchNameMaxLength);
@@ -158,24 +147,11 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                                 return (
                                     <TextField
                                         key={workItemId}
-                                        value={name}
-                                        prefixIconProps={{
-                                            render: () => {
-                                                return prefix === "" ? (
-                                                    <></>
-                                                ) : (
-                                                    <span className="padding-left-8 secondary-text">{prefix}</span>
-                                                );
-                                            },
-                                        }}
+                                        value={prefix + name}
                                         onChange={(_, newValue) => {
                                             const pullRequestNames = this.state.pullRequestNames;
 
-                                            if (newValue.startsWith(prefix)) {
-                                                newValue = newValue.slice(prefix.length);
-                                            }
-
-                                            pullRequestNames[workItemId] = [prefix, newValue];
+                                            pullRequestNames[workItemId] = [prefix, this.trimPrefix(newValue, prefix)];
 
                                             this.setState({ pullRequestNames: pullRequestNames });
                                         }}
@@ -281,6 +257,17 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                 pullRequestNames: pullRequestNames,
             }));
         }
+    }
+
+    private trimPrefix(value: string, prefix: string): string {
+        let existingPrefixLength = 0;
+        for (let i = 0; i < prefix.length; i++) {
+            if (value[i] === prefix[i]) {
+                existingPrefixLength++;
+            }
+        }
+
+        return value.slice(existingPrefixLength);
     }
 }
 
