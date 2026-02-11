@@ -1,15 +1,31 @@
-import * as SDK from "azure-devops-extension-sdk";
-import { CommonServiceIds, getClient, IGlobalMessagesService, IHostNavigationService, IProjectInfo } from "azure-devops-extension-api";
-import { WorkItemTrackingRestClient, WorkItemExpand, WorkItemRelation } from "azure-devops-extension-api/WorkItemTracking";
+import {
+    CommonServiceIds,
+    getClient,
+    IGlobalMessagesService,
+    IHostNavigationService,
+    IProjectInfo,
+} from "azure-devops-extension-api";
 import { GitRestClient } from "azure-devops-extension-api/Git";
+import { JsonPatchOperation, Operation } from "azure-devops-extension-api/WebApi";
+import {
+    WorkItemExpand,
+    WorkItemRelation,
+    WorkItemTrackingRestClient,
+} from "azure-devops-extension-api/WorkItemTracking";
+import * as SDK from "azure-devops-extension-sdk";
+import SettingsDocument from "./settingsDocument";
 import { StorageService } from "./storage-service";
 import { Tokenizer } from "./tokenizer";
-import { JsonPatchOperation, Operation } from "azure-devops-extension-api/WebApi";
-import SettingsDocument from "./settingsDocument";
 
 export class BranchCreator {
-
-    public async createBranch(workItemId: number, repositoryId: string, sourceBranchName: string, project: IProjectInfo, gitBaseUrl: string): Promise<string | undefined> {
+    public async createBranch(
+        workItemId: number,
+        repositoryId: string,
+        sourceBranchName: string,
+        project: IProjectInfo,
+        gitBaseUrl: string,
+        branchName: string,
+    ): Promise<string | undefined> {
         const navigationService = await SDK.getService<IHostNavigationService>(CommonServiceIds.HostNavigationService);
         const globalMessagesSvc = await SDK.getService<IGlobalMessagesService>(CommonServiceIds.GlobalMessagesService);
         const gitRestClient = getClient(GitRestClient);
@@ -18,8 +34,6 @@ export class BranchCreator {
         const settingsDocument = await storageService.getSettings();
 
         const repository = await gitRestClient.getRepository(repositoryId, project.name);
-
-        const branchName = await this.getBranchName(workItemTrackingRestClient, settingsDocument, workItemId, project.name, sourceBranchName);
         const branchUrl = `${gitBaseUrl}/${repository.name}?version=GB${encodeURI(branchName)}`;
 
         if (await this.branchExists(gitRestClient, repositoryId, project.name, branchName)) {
@@ -31,12 +45,14 @@ export class BranchCreator {
                 callToAction: "Open branch",
                 onCallToActionClick: async () => {
                     navigationService.openNewWindow(branchUrl, "");
-                }
+                },
             });
             return;
         }
 
-        const branch = (await gitRestClient.getBranches(repositoryId, project.name)).find((x) => x.name === sourceBranchName);
+        const branch = (await gitRestClient.getBranches(repositoryId, project.name)).find(
+            (x) => x.name === sourceBranchName,
+        );
         if (!branch) {
             console.warn(`Branch ${sourceBranchName} not found`);
             return;
@@ -49,7 +65,7 @@ export class BranchCreator {
 
         globalMessagesSvc.addToast({
             duration: 3000,
-            message: `Branch ${branchName} created`
+            message: `Branch ${branchName} created`,
         });
 
         navigationService.openNewWindow(branchUrl, "");
@@ -57,97 +73,157 @@ export class BranchCreator {
         return branchName;
     }
 
-    public async getBranchName(workItemTrackingRestClient: WorkItemTrackingRestClient, settingsDocument: SettingsDocument, workItemId: number, project: string, sourceBranchName: string): Promise<string> {
-        const workItem = await workItemTrackingRestClient.getWorkItem(workItemId, project, undefined, undefined, WorkItemExpand.Fields);
+    public async getBranchName(
+        workItemTrackingRestClient: WorkItemTrackingRestClient,
+        settingsDocument: SettingsDocument,
+        workItemId: number,
+        project: string,
+        sourceBranchName: string,
+    ): Promise<[string, string]> {
+        const workItem = await workItemTrackingRestClient.getWorkItem(
+            workItemId,
+            project,
+            undefined,
+            undefined,
+            WorkItemExpand.Fields,
+        );
         const workItemType = workItem.fields["System.WorkItemType"];
 
         let branchNameTemplate = settingsDocument.defaultBranchNameTemplate;
-        if (workItemType in settingsDocument.branchNameTemplates && settingsDocument.branchNameTemplates[workItemType].isActive) {
+        if (
+            workItemType in settingsDocument.branchNameTemplates &&
+            settingsDocument.branchNameTemplates[workItemType].isActive
+        ) {
             branchNameTemplate = settingsDocument.branchNameTemplates[workItemType].value;
         }
 
-        const tokenizer = new Tokenizer();
-        const tokens = tokenizer.getTokens(branchNameTemplate);
+        let splitTemplate = branchNameTemplate.split("|", 2);
+        let prefixTemplate = "";
+        if (splitTemplate.length === 2) {
+            prefixTemplate = splitTemplate[0];
+            branchNameTemplate = splitTemplate[1];
+        } else {
+            branchNameTemplate = splitTemplate.join("");
+        }
 
-        let branchName = branchNameTemplate;
-        tokens.forEach((token) => {
-            let workItemFieldName = token.replace('${', '').replace('}', '');
-            let workItemFieldValue = ""
-            if (workItemFieldName == "SourceBranchName") {
-                workItemFieldValue = sourceBranchName
-            }
-            else if (workItemFieldName == "SourceBranchNameTail") {
-                workItemFieldValue = sourceBranchName.replace(/.+\//, "")
-            }
-            else {
-                workItemFieldValue = workItem.fields[workItemFieldName];
-            }
+        const replaceTokens = (template: string): string => {
+            const tokenizer = new Tokenizer();
+            const tokens = tokenizer.getTokens(template);
 
-            if (workItemFieldValue) {
-                if (typeof workItemFieldValue.replace === 'function') {
-                    workItemFieldValue = workItemFieldValue.replace(/[^a-zA-Z0-9]/g, settingsDocument.nonAlphanumericCharactersReplacement);
+            let result = template;
+            tokens.forEach((token) => {
+                let workItemFieldName = token.replace("${", "").replace("}", "");
+                let workItemFieldValue = "";
+                if (workItemFieldName == "SourceBranchName") {
+                    workItemFieldValue = sourceBranchName;
+                } else if (workItemFieldName == "SourceBranchNameTail") {
+                    workItemFieldValue = sourceBranchName.replace(/.+\//, "");
+                } else {
+                    workItemFieldValue = workItem.fields[workItemFieldName];
                 }
-            }
-            branchName = branchName.replace(token, workItemFieldValue);
-        });
+
+                if (workItemFieldValue) {
+                    if (typeof workItemFieldValue.replace === "function") {
+                        workItemFieldValue = workItemFieldValue.replace(
+                            /[^a-zA-Z0-9]/g,
+                            settingsDocument.nonAlphanumericCharactersReplacement,
+                        );
+                    }
+                }
+                result = result.replace(token, workItemFieldValue);
+            });
+
+            return result;
+        };
+
+        let branchName = replaceTokens(branchNameTemplate);
 
         if (settingsDocument.lowercaseBranchName) {
             branchName = branchName.toLowerCase();
         }
 
-        return branchName;
+        const maxLength = settingsDocument.branchNameMaxLength;
+        if (maxLength !== undefined) {
+            branchName = branchName.slice(0, maxLength);
+        }
+
+        return [replaceTokens(prefixTemplate), branchName];
     }
 
-    private async createRef(gitRestClient: GitRestClient, repositoryId: string, commitId: string, branchName: string): Promise<void> {
+    private async createRef(
+        gitRestClient: GitRestClient,
+        repositoryId: string,
+        commitId: string,
+        branchName: string,
+    ): Promise<void> {
         const gitRefUpdate = {
             name: `refs/heads/${branchName}`,
             repositoryId: repositoryId,
             newObjectId: commitId,
             oldObjectId: "0000000000000000000000000000000000000000",
-            isLocked: false
+            isLocked: false,
         };
         await gitRestClient.updateRefs([gitRefUpdate], repositoryId);
     }
 
-    private async linkBranchToWorkItem(workItemTrackingRestClient: WorkItemTrackingRestClient, projectId: string, repositoryId: string, workItemId: number, branchName: string) {
+    private async linkBranchToWorkItem(
+        workItemTrackingRestClient: WorkItemTrackingRestClient,
+        projectId: string,
+        repositoryId: string,
+        workItemId: number,
+        branchName: string,
+    ) {
         const branchRef = `${projectId}/${repositoryId}/GB${branchName}`;
         const relation: WorkItemRelation = {
             rel: "ArtifactLink",
             url: `vstfs:///Git/Ref/${encodeURIComponent(branchRef)}`,
-            "attributes": {
-                name: "Branch"
-            }
+            attributes: {
+                name: "Branch",
+            },
         };
         const document: JsonPatchOperation[] = [
             {
                 from: "",
                 op: Operation.Add,
                 path: "/relations/-",
-                value: relation
-            }
+                value: relation,
+            },
         ];
         await workItemTrackingRestClient.updateWorkItem(document, workItemId);
     }
 
-    private async branchExists(gitRestClient: GitRestClient, repositoryId: string, project: string, branchName: string): Promise<boolean> {
+    private async branchExists(
+        gitRestClient: GitRestClient,
+        repositoryId: string,
+        project: string,
+        branchName: string,
+    ): Promise<boolean> {
         const branches = await gitRestClient.getRefs(repositoryId, project, `heads/${branchName}`);
         return branches.find((x) => x.name == `refs/heads/${branchName}`) !== undefined;
     }
 
-    private async updateWorkItemState(workItemTrackingRestClient: WorkItemTrackingRestClient, settingsDocument: SettingsDocument, projectId: string, workItemId: number) {
+    private async updateWorkItemState(
+        workItemTrackingRestClient: WorkItemTrackingRestClient,
+        settingsDocument: SettingsDocument,
+        projectId: string,
+        workItemId: number,
+    ) {
         try {
             if (settingsDocument.updateWorkItemState) {
                 const workItem = await workItemTrackingRestClient.getWorkItem(workItemId, projectId);
                 const workItemType = workItem.fields["System.WorkItemType"];
-                if (workItemType in settingsDocument.workItemState && settingsDocument.workItemState[workItemType].isActive) {
+                if (
+                    workItemType in settingsDocument.workItemState &&
+                    settingsDocument.workItemState[workItemType].isActive
+                ) {
                     const newState = settingsDocument.workItemState[workItemType].value;
                     const document: JsonPatchOperation[] = [
                         {
                             from: "",
                             op: Operation.Add,
                             path: "/fields/System.State",
-                            value: newState
-                        }
+                            value: newState,
+                        },
                     ];
                     await workItemTrackingRestClient.updateWorkItem(document, workItemId);
                 }

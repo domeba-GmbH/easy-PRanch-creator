@@ -1,6 +1,12 @@
-import * as SDK from "azure-devops-extension-sdk";
-import { ILocationService, CommonServiceIds, IProjectPageService, IProjectInfo, IHostPageLayoutService } from "azure-devops-extension-api";
+import {
+    CommonServiceIds,
+    IHostPageLayoutService,
+    ILocationService,
+    IProjectInfo,
+    IProjectPageService,
+} from "azure-devops-extension-api";
 import { CoreRestClient } from "azure-devops-extension-api/Core";
+import * as SDK from "azure-devops-extension-sdk";
 
 import { BranchCreator } from "../branch-creator";
 import { ISelectBranchDetailsResult } from "../branch-details-form/branch-details-form";
@@ -9,7 +15,7 @@ import { PullRequestCreator } from "../pull-request-creator";
 function createBranchFromWorkItem() {
     "use strict";
     return {
-        execute: async function (actionContext: any) {
+        execute: async function(actionContext: any) {
             const projectService = await SDK.getService<IProjectPageService>(CommonServiceIds.ProjectPageService);
             const project: IProjectInfo | undefined = await projectService.getProject();
             if (project === undefined) {
@@ -20,34 +26,55 @@ function createBranchFromWorkItem() {
             const service = await SDK.getService<ILocationService>(CommonServiceIds.LocationService);
             const hostBaseUrl = await service.getResourceAreaLocation(CoreRestClient.RESOURCE_AREA_ID);
             const host = SDK.getHost();
-            const gitBaseUrl = `${hostBaseUrl}${(hostBaseUrl.toLowerCase().indexOf(host.name.toLowerCase()) == -1 ? `${host.name}/` : "")}${project.name}/_git`;
+            const gitBaseUrl = `${hostBaseUrl}${
+                hostBaseUrl.toLowerCase().indexOf(host.name.toLowerCase()) == -1 ? `${host.name}/` : ""
+            }${project.name}/_git`;
 
             const branchCreator = new BranchCreator();
             const pullRequestCreator = new PullRequestCreator();
             const dialogService = await SDK.getService<IHostPageLayoutService>(CommonServiceIds.HostPageLayoutService);
             const workItems = getWorkItemIds(actionContext);
-            dialogService.openCustomDialog<ISelectBranchDetailsResult | undefined>(SDK.getExtensionContext().id + ".branch-details-form", {
-                title: "Select Branch Details",
-                lightDismiss: false,
-                configuration: {
-                    projectName: project.name,
-                    workItems: workItems
+            dialogService.openCustomDialog<ISelectBranchDetailsResult | undefined>(
+                SDK.getExtensionContext().id + ".branch-details-form",
+                {
+                    title: "Select Branch Details",
+                    lightDismiss: false,
+                    configuration: {
+                        projectName: project.name,
+                        workItems: workItems,
+                    },
+                    onClose: (result: ISelectBranchDetailsResult | undefined) => {
+                        if (result !== undefined) {
+                            workItems.forEach((id: number) => {
+                                branchCreator
+                                    .createBranch(
+                                        id,
+                                        result.repositoryId,
+                                        result.sourceBranchName,
+                                        project,
+                                        gitBaseUrl,
+                                        result.branchNames[id].join(""),
+                                    )
+                                    .then((branch) => {
+                                        if (branch !== undefined && result.createPullRequests)
+                                            pullRequestCreator.createPullRequest(
+                                                id,
+                                                result.repositoryId,
+                                                branch,
+                                                result.sourceBranchName,
+                                                project,
+                                                result.createPullRequestsAsDrafts,
+                                                result.pullRequestNames[id].join(""),
+                                            );
+                                    });
+                            });
+                        }
+                    },
                 },
-                onClose: (result: ISelectBranchDetailsResult | undefined) => {
-                    if (result !== undefined) {
-                        workItems.forEach((id: number) => {
-                            branchCreator.createBranch(id, result.repositoryId, result.sourceBranchName, project, gitBaseUrl)
-                            .then(branch => {
-                                if (branch !== undefined && result.createPullRequests)
-                                    pullRequestCreator.createPullRequest(id, result.repositoryId, branch, result.sourceBranchName, project, result.createPullRequestsAsDrafts)
-                            })
-                        });
-                    }
-                }
-            });
-        }
-    }
-};
+            );
+        },
+    };
+}
 
 function getWorkItemIds(actionContext: any): number[] {
     let workItemIds: number[] = [];
