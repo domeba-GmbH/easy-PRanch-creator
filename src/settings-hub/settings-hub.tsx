@@ -37,6 +37,7 @@ interface ISettingsHubState {
     workItemTypes: string[];
     workItemFieldNames: string[];
     workItemStates: Record<string, IWorkItemStateSelection>;
+    branchNameMaxLengthErrorMessages: string[];
 }
 
 interface IWorkItemStateSelection {
@@ -58,6 +59,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 id: "",
                 defaultBranchNameTemplate: "",
                 branchNameTemplates: {},
+                branchNameMaxLength: undefined,
                 lowercaseBranchName: false,
                 nonAlphanumericCharactersReplacement: "",
                 updateWorkItemState: false,
@@ -76,6 +78,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
             workItemTypes: [],
             workItemFieldNames: [],
             workItemStates: {},
+            branchNameMaxLengthErrorMessages: [],
         };
     }
 
@@ -150,7 +153,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     onChange={(e, newValue) => {
                                         const validateBranchNameTemplateResult = this.branchNameTemplateValidator.validateBranchNameTemplate(
                                             newValue,
-                                            this.state.workItemFieldNames
+                                            this.state.workItemFieldNames,
                                         );
                                         this.setState((prevState) => ({
                                             ...prevState,
@@ -166,6 +169,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     width={TextFieldWidth.standard}
                                 />
                             </FormItem>
+
                             <div className="margin-left-16">
                                 <div className="margin-top-16 margin-bottom-8">
                                     <span>Template Overrides</span>
@@ -175,7 +179,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                         <FormItem
                                             key={workItemType}
                                             message={this.getErrorMessageElement(
-                                                this.state.errorMessages[workItemType]
+                                                this.state.errorMessages[workItemType],
                                             )}
                                             error={this.state.isTemplateInvalid}
                                             className="margin-bottom-8"
@@ -217,7 +221,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                                     onChange={(e, newValue) => {
                                                         const validateBranchNameTemplateResult = this.branchNameTemplateValidator.validateBranchNameTemplate(
                                                             newValue,
-                                                            this.state.workItemFieldNames
+                                                            this.state.workItemFieldNames,
                                                         );
                                                         this.setState((prevState) => ({
                                                             ...prevState,
@@ -248,8 +252,48 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     );
                                 })}
                             </div>
+
+                            <FormItem
+                                label="Maximum length"
+                                className="margin-bottom-8"
+                                error={this.state.branchNameMaxLengthErrorMessages.length > 0}
+                                message={this.getErrorMessageElement(this.state.branchNameMaxLengthErrorMessages)}
+                            >
+                                <TextField
+                                    value={this.state.updatedSettingsDocument.branchNameMaxLength?.toString()}
+                                    disabled={!this.state.isReady}
+                                    onChange={(e, newValue) => {
+                                        if (newValue == "") {
+                                            this.setState((prevState) => ({
+                                                ...prevState,
+                                                updatedSettingsDocument: {
+                                                    ...prevState.updatedSettingsDocument,
+                                                    branchNameMaxLength: undefined,
+                                                },
+                                                branchNameMaxLengthErrorMessages: [],
+                                            }));
+                                        } else {
+                                            const number = Number(newValue);
+                                            if (Number.isNaN(number)) {
+                                                return;
+                                            }
+
+                                            this.setState((prevState) => ({
+                                                ...prevState,
+                                                updatedSettingsDocument: {
+                                                    ...prevState.updatedSettingsDocument,
+                                                    branchNameMaxLength: number,
+                                                },
+                                                branchNameMaxLengthErrorMessages: [],
+                                            }));
+                                        }
+                                    }}
+                                    width={TextFieldWidth.standard}
+                                />
+                            </FormItem>
                         </form>
                     </Card>
+
                     <Card className="flex-grow margin-bottom-16">
                         <form>
                             <FormItem label="Non-alphanumeric characters replacement">
@@ -261,7 +305,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     selection={this.nonAlphanumericCharactersReplacementSelection}
                                     onSelect={(
                                         event: React.SyntheticEvent<HTMLElement>,
-                                        item: IListBoxItem<string>
+                                        item: IListBoxItem<string>,
                                     ) => {
                                         this.setState((prevState) => ({
                                             ...prevState,
@@ -348,7 +392,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                                         selection={this.state.workItemStates[workItemType].selected}
                                                         onSelect={(
                                                             event: React.SyntheticEvent<HTMLElement>,
-                                                            item: IListBoxItem<string>
+                                                            item: IListBoxItem<string>,
                                                         ) => {
                                                             this.setState((prevState) => ({
                                                                 ...prevState,
@@ -402,34 +446,10 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                         titleProps={{ text: "Pull Request creator", ariaLevel: 3 }}
                     >
                         <form>
-                            <FormItem label="Default repository" className="margin-bottom-8">
-                                <TextField
-                                    value={this.state.updatedSettingsDocument.defaultRepositoryName}
-                                    disabled={!this.state.isReady}
-                                    onChange={(e, newValue) => {
-                                        this.setState((prevState) => ({
-                                            ...prevState,
-                                            updatedSettingsDocument: {
-                                                ...prevState.updatedSettingsDocument,
-                                                defaultRepositoryName: newValue,
-                                            },
-                                        }));
-                                    }}
-                                    width={TextFieldWidth.standard}
-                                />
-                            </FormItem>
-                        </form>
-                    </Card>
-
-                    <Card
-                        className="flex-grow margin-bottom-16"
-                        titleProps={{ text: "Pull Request creator", ariaLevel: 3 }}
-                    >
-                        <form>
                             <FormItem
                                 label="Pull Request name template"
                                 message={this.getErrorMessageElement(
-                                    this.state.defaultPullRequestNameTemplateErrorMessages
+                                    this.state.defaultPullRequestNameTemplateErrorMessages,
                                 )}
                                 error={this.state.isPullRequestNameTemplateInvalid}
                                 className="margin-bottom-8"
@@ -440,7 +460,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                                     onChange={(e, newValue) => {
                                         const validatePullRequestNameTemplateResult = this.pullRequestNameTemplateValidator.validatePullRequestNameTemplate(
                                             newValue,
-                                            this.state.workItemFieldNames
+                                            this.state.workItemFieldNames,
                                         );
                                         this.setState((prevState) => ({
                                             ...prevState,
@@ -521,7 +541,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 disabled:
                     this.isSettingsDocumentEqual(
                         this.state.initialSettingsDocument,
-                        this.state.updatedSettingsDocument
+                        this.state.updatedSettingsDocument,
                     ) ||
                     this.state.isTemplateInvalid ||
                     this.state.isPullRequestNameTemplateInvalid,
@@ -535,7 +555,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
 
     private isSettingsDocumentEqual(
         initialSettingsDocument: SettingsDocument | undefined,
-        updatedSettingsDocument: SettingsDocument
+        updatedSettingsDocument: SettingsDocument,
     ): boolean {
         if (initialSettingsDocument === undefined) {
             return true;
@@ -551,7 +571,8 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
                 updatedSettingsDocument.defaultPullRequestNameTemplate ||
             initialSettingsDocument.createPullRequestByDefault !== updatedSettingsDocument.createPullRequestByDefault ||
             initialSettingsDocument.createPullRequestsAsDrafts !== updatedSettingsDocument.createPullRequestsAsDrafts ||
-            initialSettingsDocument.defaultRepositoryName !== updatedSettingsDocument.defaultRepositoryName
+            initialSettingsDocument.defaultRepositoryName !== updatedSettingsDocument.defaultRepositoryName ||
+            initialSettingsDocument.branchNameMaxLength !== updatedSettingsDocument.branchNameMaxLength
         ) {
             return false;
         }
@@ -587,11 +608,11 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
         this.nonAlphanumericCharactersReplacementSelectionOptions.push(
             ...Constants.NonAlphanumericCharactersReplacementSelectionOptions.map((t) => {
                 return { id: t.id, data: t.id, text: t.text };
-            })
+            }),
         );
 
         const index = Constants.NonAlphanumericCharactersReplacementSelectionOptions.findIndex(
-            (x) => x.id === this.state.updatedSettingsDocument.nonAlphanumericCharactersReplacement
+            (x) => x.id === this.state.updatedSettingsDocument.nonAlphanumericCharactersReplacement,
         );
         this.nonAlphanumericCharactersReplacementSelection.select(index >= 0 ? index : 0);
     }
@@ -623,14 +644,14 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
     private async getWorkItemStates(
         projectName: string,
         workItemTypes: string[],
-        settingsDocument: SettingsDocument
+        settingsDocument: SettingsDocument,
     ): Promise<Record<string, IWorkItemStateSelection>> {
         const workItemTrackingRestClient = getClient(WorkItemTrackingRestClient);
         let workItemStates: Record<string, IWorkItemStateSelection> = {};
         for await (const workItemType of workItemTypes) {
             const workItemTypeStates = await workItemTrackingRestClient.getWorkItemTypeStates(
                 projectName,
-                workItemType
+                workItemType,
             );
             workItemStates[workItemType] = {
                 items: new ObservableArray<IListBoxItem<string>>(),
@@ -639,7 +660,7 @@ class SettingsHub extends React.Component<{}, ISettingsHubState> {
             workItemStates[workItemType].items.push(
                 ...workItemTypeStates.map((x) => {
                     return { id: x.name, data: x.name, text: x.name };
-                })
+                }),
             );
 
             const index = settingsDocument.workItemState[workItemType]

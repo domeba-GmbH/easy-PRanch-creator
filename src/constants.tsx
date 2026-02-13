@@ -16,6 +16,7 @@ export class Constants {
         createPullRequestByDefault: false,
         createPullRequestsAsDrafts: false,
         defaultRepositoryName: "",
+        branchNameMaxLength: undefined,
     };
 
     public static NonAlphanumericCharactersReplacementSelectionOptions = [

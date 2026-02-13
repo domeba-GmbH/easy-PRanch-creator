@@ -13,6 +13,7 @@ export default interface SettingsDocument {
     id: string;
     defaultBranchNameTemplate: string;
     branchNameTemplates: Record<string, BranchNameTemplate>;
+    branchNameMaxLength: number | undefined;
     nonAlphanumericCharactersReplacement: string;
     lowercaseBranchName: boolean;
     updateWorkItemState: boolean;

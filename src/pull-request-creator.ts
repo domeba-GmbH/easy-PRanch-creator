@@ -18,22 +18,15 @@ export class PullRequestCreator {
         sourceBranchName: string,
         targetBranchName: string,
         project: IProjectInfo,
-        createAsDraft: boolean
+        createAsDraft: boolean,
+        pullRequestTitle: string,
     ) {
         const globalMessagesSvc = await SDK.getService<IGlobalMessagesService>(CommonServiceIds.GlobalMessagesService);
         const gitRestClient = getClient(GitRestClient);
         const workItemTrackingRestClient = getClient(WorkItemTrackingRestClient);
         const storageService = new StorageService();
-        const settingsDocument = await storageService.getSettings();
 
         const repository = await gitRestClient.getRepository(repositoryId, project.name);
-
-        const pullRequestTitle = await this.getPullRequestName(
-            workItemTrackingRestClient,
-            settingsDocument,
-            workItemId,
-            project.id
-        );
 
         const pullRequestTemplate = await this.getPRTemplate(gitRestClient, repositoryId, project.id);
 
@@ -42,7 +35,7 @@ export class PullRequestCreator {
             sourceRefName: `refs/heads/${sourceBranchName}`,
             targetRefName: `refs/heads/${targetBranchName}`,
             isDraft: createAsDraft,
-            description: pullRequestTemplate ?? ""
+            description: pullRequestTemplate ?? "",
         } as GitPullRequest;
 
         pullRequest = await gitRestClient.createPullRequest(pullRequest, repositoryId, project.id);
@@ -52,7 +45,7 @@ export class PullRequestCreator {
             project.id,
             repositoryId,
             workItemId,
-            pullRequest.pullRequestId
+            pullRequest.pullRequestId,
         );
 
         console.log(`Pull Request ${pullRequestTitle} created in repository ${repository.name}`);
@@ -67,30 +60,43 @@ export class PullRequestCreator {
         workItemTrackingRestClient: WorkItemTrackingRestClient,
         settingsDocument: SettingsDocument,
         workItemId: number,
-        project: string
-    ): Promise<string> {
+        project: string,
+    ): Promise<[string, string]> {
         const workItem = await workItemTrackingRestClient.getWorkItem(
             workItemId,
             project,
             undefined,
             undefined,
-            WorkItemExpand.Fields
+            WorkItemExpand.Fields,
         );
 
         let pullRequestNameTemplate = settingsDocument.defaultPullRequestNameTemplate;
 
-        const tokenizer = new Tokenizer();
-        const tokens = tokenizer.getTokens(pullRequestNameTemplate);
+        let splitTemplate = pullRequestNameTemplate.split("|", 2);
+        let prefixTemplate = "";
+        if (splitTemplate.length === 2) {
+            prefixTemplate = splitTemplate[0];
+            pullRequestNameTemplate = splitTemplate[1];
+        } else {
+            pullRequestNameTemplate = splitTemplate.join("");
+        }
 
-        let pullRequestName = pullRequestNameTemplate;
-        tokens.forEach((token) => {
-            let workItemFieldName = token.replace("${", "").replace("}", "");
-            let workItemFieldValue = workItem.fields[workItemFieldName];
+        const replaceTokens = (template: string): string => {
+            const tokenizer = new Tokenizer();
+            const tokens = tokenizer.getTokens(template);
 
-            pullRequestName = pullRequestName.replace(token, workItemFieldValue);
-        });
+            let result = template;
+            tokens.forEach((token) => {
+                let workItemFieldName = token.replace("${", "").replace("}", "");
+                let workItemFieldValue = workItem.fields[workItemFieldName];
 
-        return pullRequestName;
+                result = result.replace(token, workItemFieldValue);
+            });
+
+            return result;
+        };
+
+        return [replaceTokens(prefixTemplate), replaceTokens(pullRequestNameTemplate)];
     }
 
     private async linkPullRequestToWorkItem(
@@ -98,7 +104,7 @@ export class PullRequestCreator {
         projectId: string,
         repositoryId: string,
         workItemId: number,
-        pullRequestId: number
+        pullRequestId: number,
     ) {
         const pullRequestRef = `${projectId}/${repositoryId}/${pullRequestId}`;
         const relation: WorkItemRelation = {
@@ -124,16 +130,24 @@ export class PullRequestCreator {
     private async getPRTemplate(
         gitRestClient: GitRestClient,
         repositoryId: string,
-        projectId: string
-    ) : Promise<string | undefined> {
-        try 
-        {
-            const response = await gitRestClient.getItem(repositoryId, "/.azuredevops/pull_request_template.md", projectId, undefined, undefined, undefined, undefined, undefined, undefined, true);
+        projectId: string,
+    ): Promise<string | undefined> {
+        try {
+            const response = await gitRestClient.getItem(
+                repositoryId,
+                "/.azuredevops/pull_request_template.md",
+                projectId,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                true,
+            );
             return response.content;
-        }
-        catch {
+        } catch {
             return undefined;
         }
-
     }
 }
