@@ -41,6 +41,7 @@ interface ISelectBranchDetailsState {
     settingsDocument?: SettingsDocument;
     branchCreator: BranchCreator;
     pullRequestCreator: PullRequestCreator;
+    editingBranchNames: Set<string>;
 }
 
 class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
@@ -53,6 +54,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
             pullRequestNames: {},
             branchCreator: new BranchCreator(),
             pullRequestCreator: new PullRequestCreator(),
+            editingBranchNames: new Set(),
         };
     }
 
@@ -105,11 +107,38 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                     <div className="branchNames flex-column scroll-auto">
                         {Object.keys(this.state.branchNames).map((workItemId) => {
                             const [prefix, name] = this.state.branchNames[workItemId];
+                            const readOnly = !this.state.editingBranchNames.has(workItemId);
+                            const value = readOnly ? prefix + name : name;
 
                             return (
                                 <TextField
                                     key={workItemId}
-                                    value={prefix + name}
+                                    value={value}
+                                    readOnly={readOnly}
+                                    prefixIconProps={{
+                                        render: () => {
+                                            return prefix === "" || readOnly ? (
+                                                <></>
+                                            ) : (
+                                                <span className="padding-left-8 secondary-text">{prefix}</span>
+                                            );
+                                        },
+                                    }}
+                                    suffixIconProps={{
+                                        iconName: "Edit",
+                                        onClick: () => {
+                                            const editingState = this.state.editingBranchNames;
+                                            if (editingState.has(workItemId)) {
+                                                editingState.delete(workItemId);
+                                            } else {
+                                                editingState.add(workItemId);
+                                            }
+                                            this.setState({ editingBranchNames: editingState });
+                                        },
+                                        tooltipProps: {
+                                            text: "Click to edit the branch name",
+                                        },
+                                    }}
                                     onChange={(_, newValue) => {
                                         if (this.state.settingsDocument === undefined) {
                                             console.error("Edited before initialization.");
@@ -118,16 +147,21 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
 
                                         const branchNames = this.state.branchNames;
 
-                                        newValue = this.trimPrefix(newValue, prefix);
+                                        if (newValue.startsWith(prefix)) {
+                                            newValue = newValue.slice(prefix.length);
+                                        }
+
+                                        if (
+                                            this.state.settingsDocument.branchNameMaxLength &&
+                                            newValue.length > this.state.settingsDocument.branchNameMaxLength
+                                        ) {
+                                            return;
+                                        }
 
                                         newValue = this.state.branchCreator.enforceRestrictions(
                                             newValue,
                                             this.state.settingsDocument,
                                         );
-
-                                        if (branchNames[workItemId][1] === newValue) {
-                                            return;
-                                        }
 
                                         branchNames[workItemId] = [prefix, newValue];
 
@@ -161,29 +195,15 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                     </div>
                     {this.state.createPullRequests && (
                         <div className="branchNames flex-column scroll-auto">
-                            {Object.keys(this.state.pullRequestNames).map((workItemId) => {
-                                const [prefix, name] = this.state.pullRequestNames[workItemId];
+                            <div>
+                                <ul>
+                                    {Object.keys(this.state.pullRequestNames).map((workItemId) => {
+                                        const [prefix, name] = this.state.pullRequestNames[workItemId];
 
-                                return (
-                                    <TextField
-                                        key={workItemId}
-                                        value={prefix + name}
-                                        onChange={(_, newValue) => {
-                                            const pullRequestNames = this.state.pullRequestNames;
-
-                                            newValue = this.trimPrefix(newValue, prefix);
-
-                                            if (pullRequestNames[workItemId][1] === newValue) {
-                                                return;
-                                            }
-
-                                            pullRequestNames[workItemId] = [prefix, newValue];
-
-                                            this.setState({ pullRequestNames: pullRequestNames });
-                                        }}
-                                    />
-                                );
-                            })}
+                                        return <li key={workItemId}>{prefix + name}</li>;
+                                    })}
+                                </ul>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -281,17 +301,6 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                 pullRequestNames: pullRequestNames,
             }));
         }
-    }
-
-    private trimPrefix(value: string, prefix: string): string {
-        let existingPrefixLength = 0;
-        for (let i = 0; i < prefix.length; i++) {
-            if (value[i] === prefix[i]) {
-                existingPrefixLength++;
-            }
-        }
-
-        return value.slice(existingPrefixLength);
     }
 }
 
