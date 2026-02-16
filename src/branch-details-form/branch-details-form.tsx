@@ -14,6 +14,7 @@ import { BranchCreator } from "../branch-creator";
 import { BranchSelect } from "../branch-select/branch-select";
 import { PullRequestCreator } from "../pull-request-creator";
 import { RepositorySelect } from "../repository-select/repository-select";
+import SettingsDocument from "../settingsDocument";
 import { StorageService } from "../storage-service";
 
 export interface ISelectBranchDetailsResult {
@@ -37,13 +38,22 @@ interface ISelectBranchDetailsState {
     createPullRequests?: boolean;
     createPullRequestsAsDrafts?: boolean;
     pullRequestNames: Record<string, [string, string]>;
-    branchNameMaxLength?: number;
+    settingsDocument?: SettingsDocument;
+    branchCreator: BranchCreator;
+    pullRequestCreator: PullRequestCreator;
 }
 
 class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
     constructor(props: {}) {
         super(props);
-        this.state = { workItems: [], branchNames: {}, ready: false, pullRequestNames: {} };
+        this.state = {
+            workItems: [],
+            branchNames: {},
+            ready: false,
+            pullRequestNames: {},
+            branchCreator: new BranchCreator(),
+            pullRequestCreator: new PullRequestCreator(),
+        };
     }
 
     public componentDidMount() {
@@ -65,7 +75,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                 workItems: config.workItems,
                 selectedRepositoryId: config.initialValue,
                 ready: false,
-                branchNameMaxLength: settingsDocument.branchNameMaxLength,
+                settingsDocument: settingsDocument,
             });
 
             await this.setBranchNames();
@@ -101,12 +111,22 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                                     key={workItemId}
                                     value={prefix + name}
                                     onChange={(_, newValue) => {
+                                        if (this.state.settingsDocument === undefined) {
+                                            console.error("Edited before initialization.");
+                                            return;
+                                        }
+
                                         const branchNames = this.state.branchNames;
 
                                         newValue = this.trimPrefix(newValue, prefix);
 
-                                        if (this.state.branchNameMaxLength) {
-                                            newValue = newValue.slice(0, this.state.branchNameMaxLength);
+                                        newValue = this.state.branchCreator.enforceRestrictions(
+                                            newValue,
+                                            this.state.settingsDocument,
+                                        );
+
+                                        if (branchNames[workItemId][1] === newValue) {
+                                            return;
                                         }
 
                                         branchNames[workItemId] = [prefix, newValue];
@@ -151,7 +171,13 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                                         onChange={(_, newValue) => {
                                             const pullRequestNames = this.state.pullRequestNames;
 
-                                            pullRequestNames[workItemId] = [prefix, this.trimPrefix(newValue, prefix)];
+                                            newValue = this.trimPrefix(newValue, prefix);
+
+                                            if (pullRequestNames[workItemId][1] === newValue) {
+                                                return;
+                                            }
+
+                                            pullRequestNames[workItemId] = [prefix, newValue];
 
                                             this.setState({ pullRequestNames: pullRequestNames });
                                         }}
@@ -214,10 +240,9 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
             const storageService = new StorageService();
             const settingsDocument = await storageService.getSettings();
 
-            const branchCreator = new BranchCreator();
             let branchNames: Record<string, [string, string]> = {};
             for await (const workItemId of this.state.workItems) {
-                const branchName = await branchCreator.getBranchName(
+                const branchName = await this.state.branchCreator.getBranchName(
                     workItemTrackingRestClient,
                     settingsDocument,
                     workItemId,
@@ -240,10 +265,9 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
             const storageService = new StorageService();
             const settingsDocument = await storageService.getSettings();
 
-            const pullRequestCreator = new PullRequestCreator();
             let pullRequestNames: Record<string, [string, string]> = {};
             for await (const workItemId of this.state.workItems) {
-                const prName = await pullRequestCreator.getPullRequestName(
+                const prName = await this.state.pullRequestCreator.getPullRequestName(
                     workItemTrackingRestClient,
                     settingsDocument,
                     workItemId,

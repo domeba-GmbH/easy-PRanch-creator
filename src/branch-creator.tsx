@@ -136,18 +136,25 @@ export class BranchCreator {
             return result;
         };
 
-        let branchName = replaceTokens(branchNameTemplate);
+        return [
+            replaceTokens(prefixTemplate),
+            this.enforceRestrictions(replaceTokens(branchNameTemplate), settingsDocument),
+        ];
+    }
+
+    public enforceRestrictions(branchName: string, settingsDocument: SettingsDocument): string {
+        let result = branchName.replace(/[^a-zA-Z0-9]/g, settingsDocument.nonAlphanumericCharactersReplacement);
 
         if (settingsDocument.lowercaseBranchName) {
-            branchName = branchName.toLowerCase();
+            result = result.toLowerCase();
         }
 
         const maxLength = settingsDocument.branchNameMaxLength;
         if (maxLength !== undefined) {
-            branchName = branchName.slice(0, maxLength);
+            result = result.slice(0, maxLength);
         }
 
-        return [replaceTokens(prefixTemplate), branchName];
+        return result;
     }
 
     private async createRef(
