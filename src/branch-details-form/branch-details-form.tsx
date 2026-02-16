@@ -1,25 +1,31 @@
 import "./branch-details-form.scss";
 
+import { getClient } from "azure-devops-extension-api";
+import * as SDK from "azure-devops-extension-sdk";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import * as SDK from "azure-devops-extension-sdk";
-import { getClient } from "azure-devops-extension-api";
 
+import { WorkItemTrackingRestClient } from "azure-devops-extension-api/WorkItemTracking";
 import { Button } from "azure-devops-ui/Button";
 import { ButtonGroup } from "azure-devops-ui/ButtonGroup";
-import { WorkItemTrackingRestClient } from "azure-devops-extension-api/WorkItemTracking";
+import { Checkbox } from "azure-devops-ui/Checkbox";
+import { TextField } from "azure-devops-ui/TextField";
 import { BranchCreator } from "../branch-creator";
-import { StorageService } from "../storage-service";
-import { RepositorySelect } from "../repository-select/repository-select";
 import { BranchSelect } from "../branch-select/branch-select";
 import { PullRequestCreator } from "../pull-request-creator";
-import { Checkbox } from "azure-devops-ui/Checkbox";
+import { RepositorySelect } from "../repository-select/repository-select";
+import SettingsDocument from "../settingsDocument";
+import { StorageService } from "../storage-service";
 
 export interface ISelectBranchDetailsResult {
     repositoryId: string;
     sourceBranchName: string;
+    // prefix + name for each work item
+    branchNames: Record<string, [string, string]>;
     createPullRequests: boolean;
     createPullRequestsAsDrafts: boolean;
+    // prefix + name for each work item
+    pullRequestNames: Record<string, [string, string]>;
 }
 
 interface ISelectBranchDetailsState {
@@ -28,16 +34,28 @@ interface ISelectBranchDetailsState {
     selectedRepositoryId?: string;
     sourceBranchName?: string;
     ready: boolean;
-    branchNames: string[];
+    branchNames: Record<string, [string, string]>;
     createPullRequests?: boolean;
     createPullRequestsAsDrafts?: boolean;
-    pullRequestNames: string[];
+    pullRequestNames: Record<string, [string, string]>;
+    settingsDocument?: SettingsDocument;
+    branchCreator: BranchCreator;
+    pullRequestCreator: PullRequestCreator;
+    editingBranchNames: Set<string>;
 }
 
 class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
     constructor(props: {}) {
         super(props);
-        this.state = { workItems: [], branchNames: [], ready: false, pullRequestNames: [] };
+        this.state = {
+            workItems: [],
+            branchNames: {},
+            ready: false,
+            pullRequestNames: {},
+            branchCreator: new BranchCreator(),
+            pullRequestCreator: new PullRequestCreator(),
+            editingBranchNames: new Set(),
+        };
     }
 
     public componentDidMount() {
@@ -59,15 +77,15 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                 workItems: config.workItems,
                 selectedRepositoryId: config.initialValue,
                 ready: false,
-                branchNames: [],
+                settingsDocument: settingsDocument,
             });
 
             await this.setBranchNames();
-            await this.setPullRequestNames()
+            await this.setPullRequestNames();
 
-            this.setState(prevState => ({
+            this.setState((prevState) => ({
                 ...prevState,
-                ready: true
+                ready: true,
             }));
         });
     }
@@ -78,20 +96,80 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                 <div className="branch-details-form-body flex-grow">
                     <RepositorySelect
                         projectName={this.state.projectName}
-                        onRepositoryChange={(newRepositoryId) => this.onRepositoryChange(newRepositoryId)} />
+                        onRepositoryChange={(newRepositoryId) => this.onRepositoryChange(newRepositoryId)}
+                    />
                     <BranchSelect
                         projectName={this.state.projectName}
                         repositoryId={this.state.selectedRepositoryId}
-                        onBranchChange={(newBranchName) => this.onSourceBranchNameChange(newBranchName)} />
+                        onBranchChange={(newBranchName) => this.onSourceBranchNameChange(newBranchName)}
+                    />
                     <p>Branch Name</p>
                     <div className="branchNames flex-column scroll-auto">
-                        <div>
-                            <ul>
-                                {this.state.branchNames.map((b) => (
-                                    <li key={b}>{b}</li>
-                                ))}
-                            </ul>
-                        </div>
+                        {Object.keys(this.state.branchNames).map((workItemId) => {
+                            const [prefix, name] = this.state.branchNames[workItemId];
+                            const readOnly = !this.state.editingBranchNames.has(workItemId);
+                            const value = readOnly ? prefix + name : name;
+
+                            return (
+                                <TextField
+                                    key={workItemId}
+                                    value={value}
+                                    readOnly={readOnly}
+                                    prefixIconProps={{
+                                        render: () => {
+                                            return prefix === "" || readOnly ? (
+                                                <></>
+                                            ) : (
+                                                <span className="padding-left-8 secondary-text">{prefix}</span>
+                                            );
+                                        },
+                                    }}
+                                    suffixIconProps={{
+                                        iconName: "Edit",
+                                        onClick: () => {
+                                            const editingState = this.state.editingBranchNames;
+                                            if (editingState.has(workItemId)) {
+                                                editingState.delete(workItemId);
+                                            } else {
+                                                editingState.add(workItemId);
+                                            }
+                                            this.setState({ editingBranchNames: editingState });
+                                        },
+                                        tooltipProps: {
+                                            text: "Click to edit the branch name",
+                                        },
+                                    }}
+                                    onChange={(_, newValue) => {
+                                        if (this.state.settingsDocument === undefined) {
+                                            console.error("Edited before initialization.");
+                                            return;
+                                        }
+
+                                        const branchNames = this.state.branchNames;
+
+                                        if (newValue.startsWith(prefix)) {
+                                            newValue = newValue.slice(prefix.length);
+                                        }
+
+                                        if (
+                                            this.state.settingsDocument.branchNameMaxLength &&
+                                            newValue.length > this.state.settingsDocument.branchNameMaxLength
+                                        ) {
+                                            return;
+                                        }
+
+                                        newValue = this.state.branchCreator.enforceRestrictions(
+                                            newValue,
+                                            this.state.settingsDocument,
+                                        );
+
+                                        branchNames[workItemId] = [prefix, newValue];
+
+                                        this.setState({ branchNames: branchNames });
+                                    }}
+                                />
+                            );
+                        })}
                     </div>
                     <hr></hr>
                     <div className="flex-row flex-center justify-space-between">
@@ -105,23 +183,25 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                                     this.setState({ createPullRequests: checked });
                                 }}
                             />
-                                <Checkbox
-                                    label="Create as draft"
-                                    checked={this.state.createPullRequestsAsDrafts}
-                                    disabled={!this.state.ready || !this.state.createPullRequests}
-                                    onChange={(event, checked) => {
-                                        this.setState({ createPullRequestsAsDrafts: checked });
-                                    }}
-                                />
+                            <Checkbox
+                                label="Create as draft"
+                                checked={this.state.createPullRequestsAsDrafts}
+                                disabled={!this.state.ready || !this.state.createPullRequests}
+                                onChange={(event, checked) => {
+                                    this.setState({ createPullRequestsAsDrafts: checked });
+                                }}
+                            />
                         </div>
                     </div>
                     {this.state.createPullRequests && (
                         <div className="branchNames flex-column scroll-auto">
                             <div>
                                 <ul>
-                                    {this.state.pullRequestNames.map((b) => (
-                                        <li key={b}>{b}</li>
-                                    ))}
+                                    {Object.keys(this.state.pullRequestNames).map((workItemId) => {
+                                        const [prefix, name] = this.state.pullRequestNames[workItemId];
+
+                                        return <li key={workItemId}>{prefix + name}</li>;
+                                    })}
                                 </ul>
                             </div>
                         </div>
@@ -132,23 +212,22 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                         disabled={!this.state.selectedRepositoryId}
                         primary={true}
                         text="Create Branch"
-                        onClick={() =>
-                            this.close(
+                        onClick={() => {
+                            return this.close(
                                 this.state.selectedRepositoryId && this.state.sourceBranchName
                                     ? {
                                           repositoryId: this.state.selectedRepositoryId,
                                           sourceBranchName: this.state.sourceBranchName,
+                                          branchNames: this.state.branchNames,
+                                          pullRequestNames: this.state.pullRequestNames,
                                           createPullRequests: this.state.createPullRequests ?? false,
                                           createPullRequestsAsDrafts: this.state.createPullRequestsAsDrafts ?? false,
                                       }
-                                    : undefined
-                            )
-                        }
+                                    : undefined,
+                            );
+                        }}
                     />
-                    <Button
-                        text="Cancel"
-                        onClick={() => this.close(undefined)}
-                    />
+                    <Button text="Cancel" onClick={() => this.close(undefined)} />
                 </ButtonGroup>
             </div>
         );
@@ -162,16 +241,16 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
     }
 
     private onRepositoryChange(newRepositoryId?: string | undefined): void {
-        this.setState(prevState => ({
+        this.setState((prevState) => ({
             ...prevState,
-            selectedRepositoryId: newRepositoryId
+            selectedRepositoryId: newRepositoryId,
         }));
     }
 
     private onSourceBranchNameChange(newBranchName?: string | undefined): void {
-        this.setState(prevState => ({
+        this.setState((prevState) => ({
             ...prevState,
-            sourceBranchName: newBranchName
+            sourceBranchName: newBranchName,
         }));
     }
 
@@ -181,16 +260,21 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
             const storageService = new StorageService();
             const settingsDocument = await storageService.getSettings();
 
-            const branchCreator = new BranchCreator();
-            let branchNames: string[] = [];
+            let branchNames: Record<string, [string, string]> = {};
             for await (const workItemId of this.state.workItems) {
-                const branchName = await branchCreator.getBranchName(workItemTrackingRestClient, settingsDocument, workItemId, this.state.projectName!, this.state.sourceBranchName!);
-                branchNames.push(branchName);
+                const branchName = await this.state.branchCreator.getBranchName(
+                    workItemTrackingRestClient,
+                    settingsDocument,
+                    workItemId,
+                    this.state.projectName!,
+                    this.state.sourceBranchName!,
+                );
+                branchNames[workItemId] = branchName;
             }
 
-            this.setState(prevState => ({
+            this.setState((prevState) => ({
                 ...prevState,
-                branchNames: branchNames
+                branchNames: branchNames,
             }));
         }
     }
@@ -201,16 +285,20 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
             const storageService = new StorageService();
             const settingsDocument = await storageService.getSettings();
 
-            const pullRequestCreator = new PullRequestCreator();
-            let pullRequestNames: string[] = [];
+            let pullRequestNames: Record<string, [string, string]> = {};
             for await (const workItemId of this.state.workItems) {
-                const branchName = await pullRequestCreator.getPullRequestName(workItemTrackingRestClient, settingsDocument, workItemId, this.state.projectName!);
-                pullRequestNames.push(branchName);
+                const prName = await this.state.pullRequestCreator.getPullRequestName(
+                    workItemTrackingRestClient,
+                    settingsDocument,
+                    workItemId,
+                    this.state.projectName!,
+                );
+                pullRequestNames[workItemId] = prName;
             }
 
-            this.setState(prevState => ({
+            this.setState((prevState) => ({
                 ...prevState,
-                pullRequestNames: pullRequestNames
+                pullRequestNames: pullRequestNames,
             }));
         }
     }
