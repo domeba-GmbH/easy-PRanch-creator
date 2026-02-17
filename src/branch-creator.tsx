@@ -137,13 +137,22 @@ export class BranchCreator {
         };
 
         return [
-            replaceTokens(prefixTemplate),
-            this.enforceRestrictions(replaceTokens(branchNameTemplate), settingsDocument),
+            this.enforceRestrictions(
+                replaceTokens(prefixTemplate),
+                {
+                    ...settingsDocument,
+                    branchNameMaxLength: undefined,
+                },
+                true,
+            ),
+            this.enforceRestrictions(replaceTokens(branchNameTemplate), settingsDocument, true),
         ];
     }
 
-    public enforceRestrictions(branchName: string, settingsDocument: SettingsDocument): string {
-        let result = branchName.replace(/[^a-zA-Z0-9]/g, settingsDocument.nonAlphanumericCharactersReplacement);
+    public enforceRestrictions(branchName: string, settingsDocument: SettingsDocument, allowSlashes = false): string {
+        const invalidCharsRegex = allowSlashes ? /[^a-zA-Z0-9/]/g : /[^a-zA-Z0-9]/g;
+
+        let result = branchName.replace(invalidCharsRegex, settingsDocument.nonAlphanumericCharactersReplacement);
 
         if (settingsDocument.lowercaseBranchName) {
             result = result.toLowerCase();
