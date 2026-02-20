@@ -42,6 +42,7 @@ interface ISelectBranchDetailsState {
     branchCreator: BranchCreator;
     pullRequestCreator: PullRequestCreator;
     editingBranchNames: Set<string>;
+    editingPullRequestNames: Set<string>;
 }
 
 class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
@@ -55,6 +56,7 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
             branchCreator: new BranchCreator(),
             pullRequestCreator: new PullRequestCreator(),
             editingBranchNames: new Set(),
+            editingPullRequestNames: new Set(),
         };
     }
 
@@ -195,15 +197,59 @@ class BranchDetailsForm extends React.Component<{}, ISelectBranchDetailsState> {
                     </div>
                     {this.state.createPullRequests && (
                         <div className="branchNames flex-column scroll-auto">
-                            <div>
-                                <ul>
-                                    {Object.keys(this.state.pullRequestNames).map((workItemId) => {
-                                        const [prefix, name] = this.state.pullRequestNames[workItemId];
+                            {Object.keys(this.state.pullRequestNames).map((workItemId) => {
+                                const [prefix, name] = this.state.pullRequestNames[workItemId];
+                                const readOnly = !this.state.editingPullRequestNames.has(workItemId);
+                                const value = readOnly ? prefix + name : name;
 
-                                        return <li key={workItemId}>{prefix + name}</li>;
-                                    })}
-                                </ul>
-                            </div>
+                                return (
+                                    <TextField
+                                        key={workItemId}
+                                        value={value}
+                                        readOnly={readOnly}
+                                        prefixIconProps={{
+                                            render: () => {
+                                                return prefix === "" || readOnly ? (
+                                                    <></>
+                                                ) : (
+                                                    <span className="padding-left-8 secondary-text">{prefix}</span>
+                                                );
+                                            },
+                                        }}
+                                        suffixIconProps={{
+                                            iconName: "Edit",
+                                            onClick: () => {
+                                                const editingState = this.state.editingPullRequestNames;
+                                                if (editingState.has(workItemId)) {
+                                                    editingState.delete(workItemId);
+                                                } else {
+                                                    editingState.add(workItemId);
+                                                }
+                                                this.setState({ editingPullRequestNames: editingState });
+                                            },
+                                            tooltipProps: {
+                                                text: "Click to edit the pull request name",
+                                            },
+                                        }}
+                                        onChange={(_, newValue) => {
+                                            if (this.state.settingsDocument === undefined) {
+                                                console.error("Edited before initialization.");
+                                                return;
+                                            }
+
+                                            const pullRequestNames = this.state.pullRequestNames;
+
+                                            if (newValue.startsWith(prefix)) {
+                                                newValue = newValue.slice(prefix.length);
+                                            }
+
+                                            pullRequestNames[workItemId] = [prefix, newValue];
+
+                                            this.setState({ pullRequestNames: pullRequestNames });
+                                        }}
+                                    />
+                                );
+                            })}
                         </div>
                     )}
                 </div>
